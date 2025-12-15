@@ -23,6 +23,7 @@ func main() {
 	root.PersistentFlags().StringVar(&cfgPath, "config", cfgPath, "path to config file")
 
 	root.AddCommand(startCmd(&cfgPath))
+	root.AddCommand(mcpCmd(&cfgPath))
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
@@ -36,6 +37,22 @@ func startCmd(cfgPath *string) *cobra.Command {
 		Short: "Start the gomcp-pilot gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return run(*cfgPath)
+		},
+	}
+}
+
+func mcpCmd(cfgPath *string) *cobra.Command {
+	return &cobra.Command{
+		Use:   "stdio",
+		Short: "Run as an MCP server over stdio (for MCP-compatible clients)",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load(*cfgPath)
+			if err != nil {
+				return err
+			}
+			ctx, cancel := app.WithSignals()
+			defer cancel()
+			return app.RunMCP(ctx, cfg)
 		},
 	}
 }
