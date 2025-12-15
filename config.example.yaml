@@ -11,3 +11,11 @@ upstreams:
     workdir: ""
     env: []
     auto_approve: true
+    
+  - name: "local-utils" # Go 实现的本地工具 MCP server 示例
+    command: "go"
+    args: ["run", "./scripts/local_mcp_server.go"]
+    workdir: ""
+    env: []
+    auto_approve: true
+  
