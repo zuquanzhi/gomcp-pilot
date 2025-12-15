@@ -1,21 +1,21 @@
-# Binaries and build outputs
-/gomcp
-/main
+# Go build artifacts
+bin/
 *.exe
-*.test
-*.out
-/bin/
-/dist/
+*.exe~
+*.dll
+*.so
+*.dylib
 
-# Go workspace/vendor
-/vendor/
-go.work
+# Module artifacts
+go.sum
 
-# Editor/OS artifacts
-.DS_Store
+# Editor/OS
 .idea/
 .vscode/
+*.swp
+*.swo
+.DS_Store
 
-# Local configs/tokens
-.env
-*.local.yaml
+# Logs/temp
+*.log
+tmp/

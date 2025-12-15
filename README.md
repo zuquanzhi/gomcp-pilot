@@ -1,34 +1,30 @@
-# gomcp-pilot (skeleton)
+# gomcp-pilot
 
-本仓库包含基于文档落地的工程级骨架，方便继续迭代为本地 MCP 守护进程。
-
-## 目录结构
-- `cmd/gomcp/`: Cobra CLI 入口（`gomcp start`）。
-- `internal/config`: viper 加载 config.yaml。
-- `internal/process`: 子进程编排（启动/销毁 upstream）。
-- `internal/interceptor`: Risky 调用拦截与人工确认。
-- `internal/server`: HTTP/SSE 服务（/health, /tools/list, /tools/call, /events）。
-- `internal/tui`: Bubbletea 事件视图。
-- `internal/store`: SQLite 审计占位实现。
+本地运行的 MCP 网关：通过 stdio 拉起下游 MCP 服务器，聚合工具，经由 HTTP 暴露给上游客户端。当前实现基于 `github.com/mark3labs/mcp-go` 的 stdio 客户端。
 
 ## 快速开始
-1. 安装 Go 1.22+。
-2. 在可联网环境下执行 `go mod tidy` 拉取依赖（cobra/bubbletea/sqlite 等）。
-3. 准备配置文件（默认 `~/.config/gomcp/config.yaml`，或直接使用仓库里的 `config.example.yaml`）：
-   ```yaml
-   port: 8080
-   auth_token: "demo-token"
-   upstreams:
-     - name: "project-files"
-       command: "npx"
-       args: ["-y", "@modelcontextprotocol/server-filesystem", "/Users/me/Code"]
-       auto_approve: false
+1) 配置 `config.example.yaml`（复制到目标路径），确认 `auth_token`、`port`、以及 filesystem upstream 的允许目录（macOS `/tmp` 请用 `/private/tmp`）。
+2) 拉取依赖（需要网络）：`go mod tidy`
+3) 启动：`go run ./cmd/gomcp --config config.example.yaml`
+4) 健康检查：`curl -H "Authorization: Bearer <token>" http://localhost:8080/health`
+5) 列工具：`curl -H "Authorization: Bearer <token>" http://localhost:8080/tools/list`
+6) 调用示例：
+   ```bash
+   curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+     -d '{"upstream":"filesystem","tool":"list_directory","arguments":{"path":"/your/allowed/root"}}' \
+     http://localhost:8080/tools/call
    ```
-4. 运行 `go run ./cmd/gomcp start --config ./config.example.yaml`。
 
-## TODO
-- MCP 协议：完善 stdin/stdout framing，支持正式的 MCP RPC 循环（当前按行写读占位实现）。
-- 审计存储：为 SQLite 设计 schema 并落库（`internal/store` 仍为空壳）。
-- 上游 env/secret：在配置中支持 env 注入，减少依赖 `export`。
-- UI：在 TUI 中展示请求体/响应 JSON，以及 upstream 运行状态。
-- 包发布：提供预编译二进制与更完善的安装脚本。
+## ToDo
+**已完成**
+- 使用 `mcp-go` stdio 客户端握手并缓存工具列表
+- HTTP API：`/health`、`/tools/list`、`/tools/call`，可选 Bearer Auth
+- YAML 配置示例与 CLI 启动（Cobra）
+- 简易 smoke client 脚本
+
+**待完成**
+- 依赖下载与 `go.sum`（当前网络受限，需在线补充）
+- 风险拦截/TUI 审批链（原占位实现未接入新架构）
+- 日志与持久化审计（SQLite store）
+- 多 upstream 运行状态可视化与错误回收
+- 自动化测试与 CI 脚本

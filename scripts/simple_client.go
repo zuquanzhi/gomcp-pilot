@@ -9,56 +9,37 @@ import (
 	"os"
 )
 
-// 最小 MCP 网关客户端，变量写死方便直接跑。
-// - 网关地址：baseURL
-// - 授权 Token：authToken
-// - LLM/AI 上游示例：llmBaseURL + llmAPIKey（仅用于演示透传，不会实际请求 AI）
-// - 默认调用：依次调用 filesystem / filesystem-alt 读取 /tmp
-const (
-	baseURL   = "http://localhost:8080"
-	authToken = "demo-token"
-
-	// 示例：如果你要把 AI 的 base URL 和 key 当作调用参数透传给 upstream，可在 payload 中使用。
-	llmBaseURL = "https://api.deepseek.com/v1"
-	llmAPIKey  = "sk-20061e6d98dc4f628f745e164fbbbcc4"
-)
-
+// A minimal HTTP client for manual verification of the gateway.
 func main() {
-	// 列出 upstreams
-	mustRequest("GET", baseURL+"/tools/list", authToken, nil)
+	baseURL := "http://localhost:8080"
+	authToken := "replace-with-a-strong-secret"
 
-	// 发起两次调用示例
-	payloads := []map[string]any{
-		{
-			"tool":   "filesystem",
-			"action": "read_file",
-			"target": "/tmp",
-			"llm": map[string]string{
-				"base_url": llmBaseURL,
-				"api_key":  llmAPIKey,
-			},
-		},
-		{
-			"tool":   "filesystem-alt",
-			"action": "read_file",
-			"target": "/tmp",
+	get(baseURL+"/health", authToken, nil)
+	get(baseURL+"/tools/list", authToken, nil)
+
+	callBody := map[string]any{
+		"upstream": "filesystem",
+		"tool":     "list_files",
+		"arguments": map[string]any{
+			"path": "/tmp",
 		},
 	}
-
-	for _, payload := range payloads {
-		buf, err := json.Marshal(payload)
-		if err != nil {
-			fmt.Printf("marshal payload: %v\n", err)
-			os.Exit(1)
-		}
-		mustRequest("POST", baseURL+"/tools/call", authToken, buf)
-	}
+	post(baseURL+"/tools/call", authToken, callBody)
 }
 
-func mustRequest(method, url, token string, body []byte) {
+func get(url, token string, body any) {
+	doRequest(http.MethodGet, url, token, body)
+}
+
+func post(url, token string, body any) {
+	doRequest(http.MethodPost, url, token, body)
+}
+
+func doRequest(method, url, token string, body any) {
 	var r io.Reader
 	if body != nil {
-		r = bytes.NewReader(body)
+		b, _ := json.Marshal(body)
+		r = bytes.NewReader(b)
 	}
 	req, err := http.NewRequest(method, url, r)
 	if err != nil {

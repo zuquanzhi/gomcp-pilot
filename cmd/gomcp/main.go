@@ -1,13 +1,11 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/spf13/cobra"
+
 	"gomcp-pilot/internal/app"
 	"gomcp-pilot/internal/config"
 )
@@ -15,15 +13,18 @@ import (
 func main() {
 	cfgPath := config.DefaultPath()
 
-	rootCmd := &cobra.Command{
+	root := &cobra.Command{
 		Use:   "gomcp",
-		Short: "gomcp-pilot: 本地 MCP 守护进程",
+		Short: "gomcp-pilot: MCP gateway with stdio upstreams",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return run(cfgPath)
+		},
 	}
-	rootCmd.PersistentFlags().StringVar(&cfgPath, "config", cfgPath, "配置文件路径（默认 ~/.config/gomcp/config.yaml）")
+	root.PersistentFlags().StringVar(&cfgPath, "config", cfgPath, "path to config file")
 
-	rootCmd.AddCommand(startCmd(&cfgPath))
+	root.AddCommand(startCmd(&cfgPath))
 
-	if err := rootCmd.Execute(); err != nil {
+	if err := root.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
@@ -32,22 +33,21 @@ func main() {
 func startCmd(cfgPath *string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "start",
-		Short: "启动 gomcp-pilot 守护进程",
+		Short: "Start the gomcp-pilot gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-			defer cancel()
-
-			cfg, err := config.Load(*cfgPath)
-			if err != nil {
-				return fmt.Errorf("load config: %w", err)
-			}
-
-			runtime, err := app.New(cfg)
-			if err != nil {
-				return fmt.Errorf("init app: %w", err)
-			}
-
-			return runtime.Run(ctx)
+			return run(*cfgPath)
 		},
 	}
+}
+
+func run(cfgPath string) error {
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := app.WithSignals()
+	defer cancel()
+
+	return app.Run(ctx, cfg)
 }

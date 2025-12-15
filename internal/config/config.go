@@ -1,29 +1,32 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
-	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
 
-// Config 对应 config.yaml。
+// Config represents the runtime configuration loaded from YAML.
 type Config struct {
-	Port      int        `mapstructure:"port" yaml:"port"`
-	AuthToken string     `mapstructure:"auth_token" yaml:"auth_token"`
-	Upstreams []Upstream `mapstructure:"upstreams" yaml:"upstreams"`
+	Port      int        `yaml:"port"`
+	AuthToken string     `yaml:"auth_token"`
+	Upstreams []Upstream `yaml:"upstreams"`
 }
 
+// Upstream describes a single MCP server that will be launched via stdio.
 type Upstream struct {
-	Name        string   `mapstructure:"name" yaml:"name"`
-	Command     string   `mapstructure:"command" yaml:"command"`
-	Args        []string `mapstructure:"args" yaml:"args"`
-	Workdir     string   `mapstructure:"workdir" yaml:"workdir"`
-	AutoApprove bool     `mapstructure:"auto_approve" yaml:"auto_approve"`
+	Name        string   `yaml:"name"`
+	Command     string   `yaml:"command"`
+	Args        []string `yaml:"args"`
+	Workdir     string   `yaml:"workdir"`
+	Env         []string `yaml:"env"`
+	AutoApprove bool     `yaml:"auto_approve"`
 }
 
+// DefaultPath returns the default config file path under ~/.config/gomcp/config.yaml.
 func DefaultPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -32,31 +35,36 @@ func DefaultPath() string {
 	return filepath.Join(home, ".config", "gomcp", "config.yaml")
 }
 
-// Load 读取配置，允许传入相对或绝对路径。
+// Load reads and unmarshals a YAML config file.
 func Load(path string) (*Config, error) {
-	cfg := &Config{}
-	v := viper.New()
-	v.SetConfigFile(expandPath(path))
-	v.SetConfigType("yaml")
-
-	// 默认值
-	v.SetDefault("port", 8080)
-
-	if err := v.ReadInConfig(); err != nil {
+	b, err := os.ReadFile(path)
+	if err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
-	if err := v.Unmarshal(cfg); err != nil {
-		return nil, fmt.Errorf("unmarshal: %w", err)
+	var cfg Config
+	if err := yaml.Unmarshal(b, &cfg); err != nil {
+		return nil, fmt.Errorf("parse config: %w", err)
 	}
-
-	return cfg, nil
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
 }
 
-func expandPath(path string) string {
-	if strings.HasPrefix(path, "~") {
-		if home, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(home, strings.TrimPrefix(path, "~"))
+func (c *Config) validate() error {
+	if c.Port == 0 {
+		c.Port = 8080
+	}
+	if len(c.Upstreams) == 0 {
+		return errors.New("no upstreams configured")
+	}
+	for _, ups := range c.Upstreams {
+		if ups.Name == "" {
+			return fmt.Errorf("upstream missing name")
+		}
+		if ups.Command == "" {
+			return fmt.Errorf("upstream %s missing command", ups.Name)
 		}
 	}
-	return path
+	return nil
 }

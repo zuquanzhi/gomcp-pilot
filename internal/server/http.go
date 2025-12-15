@@ -9,37 +9,29 @@ import (
 	"time"
 
 	"gomcp-pilot/internal/config"
-	"gomcp-pilot/internal/interceptor"
 	"gomcp-pilot/internal/process"
-	"gomcp-pilot/internal/tui"
 )
 
+// Server exposes HTTP endpoints for MCP tool discovery and invocation.
 type Server struct {
-	cfg         *config.Config
-	pm          *process.Manager
-	interceptor *interceptor.Interceptor
-	ui          *tui.UI
+	cfg     *config.Config
+	manager *process.Manager
+	logger  *log.Logger
 }
 
-func New(cfg *config.Config, pm *process.Manager, ic *interceptor.Interceptor, ui *tui.UI) *Server {
-	return &Server{
-		cfg:         cfg,
-		pm:          pm,
-		interceptor: ic,
-		ui:          ui,
-	}
+func New(cfg *config.Config, manager *process.Manager, logger *log.Logger) *Server {
+	return &Server{cfg: cfg, manager: manager, logger: logger}
 }
 
+// Start runs the HTTP server until the context is cancelled.
 func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
-	mux.HandleFunc("/tools/list", s.handleList)
-	mux.HandleFunc("/tools/call", s.handleCall)
-	mux.HandleFunc("/events", s.handleEvents)
+	mux.HandleFunc("/tools/list", s.handleListTools)
+	mux.HandleFunc("/tools/call", s.handleCallTool)
 
-	addr := fmt.Sprintf(":%d", s.cfg.Port)
 	srv := &http.Server{
-		Addr:    addr,
+		Addr:    fmt.Sprintf(":%d", s.cfg.Port),
 		Handler: s.authMiddleware(mux),
 	}
 
@@ -48,107 +40,78 @@ func (s *Server) Start(ctx context.Context) error {
 		_ = srv.Shutdown(context.Background())
 	}()
 
-	s.ui.Status(fmt.Sprintf("listening on %s", addr))
-	s.ui.Log(fmt.Sprintf("[http] listening on %s", addr))
+	s.logger.Printf("HTTP listening on %s", srv.Addr)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return err
 	}
 	return nil
 }
 
-func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
 }
 
-func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
-	type tool struct {
-		Name        string `json:"name"`
-		AutoApprove bool   `json:"auto_approve"`
+func (s *Server) handleListTools(w http.ResponseWriter, r *http.Request) {
+	upstream := r.URL.Query().Get("upstream")
+	tools, err := s.manager.ListTools(upstream)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
-	resp := make([]tool, 0, len(s.cfg.Upstreams))
-	for _, ups := range s.cfg.Upstreams {
-		resp = append(resp, tool{Name: ups.Name, AutoApprove: ups.AutoApprove})
-	}
-	writeJSON(w, resp)
+	writeJSON(w, tools)
 }
 
-func (s *Server) handleCall(w http.ResponseWriter, r *http.Request) {
+type callPayload struct {
+	Upstream  string      `json:"upstream"`
+	Tool      string      `json:"tool"`
+	Arguments interface{} `json:"arguments,omitempty"`
+}
+
+func (s *Server) handleCallTool(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var call interceptor.Call
-	if err := json.NewDecoder(r.Body).Decode(&call); err != nil {
-		http.Error(w, "invalid payload", http.StatusBadRequest)
+	var payload callPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+	if payload.Upstream == "" || payload.Tool == "" {
+		http.Error(w, "upstream and tool are required", http.StatusBadRequest)
 		return
 	}
 
-	reqID := s.ui.BeginRequest(call.Tool, call.Action, call.Target)
-	decision := s.interceptor.Evaluate(r.Context(), call)
-	if !decision.Allowed {
-		s.ui.ResolveRequest(reqID, "blocked", decision.Reason)
-		http.Error(w, decision.Reason, http.StatusForbidden)
-		return
-	}
-	s.ui.ResolveRequest(reqID, "allowed", decision.Reason)
+	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	defer cancel()
 
-	resp, err := s.pm.Call(r.Context(), call.Tool, call)
+	result, err := s.manager.CallTool(ctx, process.CallRequest{
+		Upstream:  payload.Upstream,
+		Tool:      payload.Tool,
+		Arguments: payload.Arguments,
+	})
 	if err != nil {
-		s.ui.ResolveRequest(reqID, "error", err.Error())
-		http.Error(w, fmt.Sprintf("upstream error: %v", err), http.StatusBadGateway)
+		http.Error(w, fmt.Sprintf("call failed: %v", err), http.StatusBadGateway)
 		return
 	}
 
-	s.ui.ResolveRequest(reqID, "done", "ok")
 	writeJSON(w, map[string]any{
-		"status":   "accepted",
-		"reason":   decision.Reason,
-		"response": resp,
+		"upstream": payload.Upstream,
+		"tool":     payload.Tool,
+		"result":   result,
 	})
 }
 
-func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "stream unsupported", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-
-	ticker := time.NewTicker(25 * time.Second)
-	defer ticker.Stop()
-
-	fmt.Fprintf(w, "data: %s\n\n", "gomcp-pilot online")
-	flusher.Flush()
-
-	for {
-		select {
-		case <-r.Context().Done():
-			return
-		case <-ticker.C:
-			fmt.Fprintf(w, "data: %s\n\n", "ping")
-			flusher.Flush()
-		}
-	}
-}
-
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
-	// 仅做轻量校验，防范 CSRF。
+	if s.cfg.AuthToken == "" {
+		return next
+	}
+	expected := "Bearer " + s.cfg.AuthToken
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.cfg.AuthToken == "" {
-			next.ServeHTTP(w, r)
-			return
-		}
-		token := r.Header.Get("Authorization")
-		expected := "Bearer " + s.cfg.AuthToken
-		if token != expected {
-			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = w.Write([]byte("unauthorized"))
+		if r.Header.Get("Authorization") != expected {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		next.ServeHTTP(w, r)

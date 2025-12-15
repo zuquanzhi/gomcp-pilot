@@ -1,81 +1,13 @@
-# gomcp-pilot 示例配置文件
-# 复制此文件到 ~/.config/gomcp/config.yaml 或使用 --config 参数指定配置文件路径
-
-# HTTP 服务端口
 port: 8080
+auth_token: "TEST"
 
-# 认证令牌（可选，用于保护 API 访问）
-# auth_token: "test"
-
-# 上游 MCP 服务器配置列表（示例使用可运行的默认路径，其他需求请自行替换）
+# Upstreams define the MCP servers that the gateway will spawn and bridge.
+# Each entry is launched via stdio; the gateway performs MCP initialization
+# and exposes the tools over HTTP.
 upstreams:
-  # 示例 1: 文件系统 MCP 服务器（读写本地文件）
-  - name: filesystem
-    command: npx
-    args:
-      - "-y"
-      - "@modelcontextprotocol/server-filesystem"
-      - "/tmp"
+  - name: "filesystem"
+    command: "npx"
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/Users/zuquanzhi/test"]
     workdir: ""
+    env: []
     auto_approve: true
-
-  # 示例 1b: 第二个文件系统 MCP（指向同一个 /tmp，便于双通道测试）
-  - name: filesystem-alt
-    command: npx
-    args:
-      - "-y"
-      - "@modelcontextprotocol/server-filesystem"
-      - "/tmp"
-    workdir: ""
-    auto_approve: true
-
-  # 示例 2: Memory MCP 服务器（内存存储，用于测试）
-  - name: memory
-    command: npx
-    args:
-      - "-y"
-      - "@modelcontextprotocol/server-memory"
-      - "/tmp"
-    workdir: ""
-    auto_approve: true
-
-  # 示例 3: Fetch MCP 服务器（HTTP 请求，抓取网页）
-  - name: fetch
-    command: npx
-    args:
-      - "-y"
-      - "@modelcontextprotocol/server-fetch"
-    workdir: ""
-    auto_approve: false
-
-  # 示例 4: SQLite 数据库 MCP 服务器（需要指定数据库文件路径）
-  - name: sqlite
-    command: npx
-    args:
-      - "-y"
-      - "@modelcontextprotocol/server-sqlite"
-      - "/tmp/test.db"
-    workdir: ""
-    auto_approve: false
-
-  # 示例 5: Brave Search（需要设置 BRAVE_API_KEY 环境变量）
-  # - name: brave-search
-  #   command: npx
-  #   args:
-  #     - "-y"
-  #     - "@modelcontextprotocol/server-brave-search"
-  #   workdir: ""
-  #   auto_approve: true
-
-  # 如需 Git/Postgres/自定义服务，请自行添加：
-  # - name: git
-  #   command: uvx
-  #   args: ["mcp-server-git", "--repository", "/absolute/path/to/repo"]
-  #   workdir: ""
-  #   auto_approve: true
-  #
-  # - name: custom-python-server
-  #   command: python
-  #   args: ["-m", "your_mcp_module"]
-  #   workdir: "/absolute/path/to/project"
-  #   auto_approve: false
