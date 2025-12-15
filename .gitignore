@@ -1,0 +1,21 @@
+# Binaries and build outputs
+/gomcp
+/main
+*.exe
+*.test
+*.out
+/bin/
+/dist/
+
+# Go workspace/vendor
+/vendor/
+go.work
+
+# Editor/OS artifacts
+.DS_Store
+.idea/
+.vscode/
+
+# Local configs/tokens
+.env
+*.local.yaml
