@@ -167,7 +167,12 @@ func (w *logWriter) Write(p []byte) (n int, err error) {
 
 // RunMCP starts upstreams and serves an MCP server over stdio.
 func RunMCP(ctx context.Context, cfg *config.Config) error {
-	logger := log.New(os.Stdout, "[gomcp] ", log.LstdFlags|log.Lmicroseconds)
+	// Initialize global zap logger first because process manager likely uses it
+	if err := logger.InitLogger(); err != nil {
+		return err
+	}
+
+	stdLog := log.New(os.Stderr, "[gomcp-stdio] ", log.LstdFlags|log.Lmicroseconds)
 
 	manager := process.NewManager()
 	if err := manager.StartAll(ctx, cfg); err != nil {
@@ -179,7 +184,7 @@ func RunMCP(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
-	logger.Println("stdio MCP server ready (connect with MCP-compatible client)")
+	stdLog.Println("stdio MCP server ready (connect with MCP-compatible client)")
 	return mcpbridge.ServeStdio(ctx, srv)
 }
 

@@ -170,7 +170,15 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	}
 	expected := "Bearer " + s.cfg.AuthToken
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != expected {
+		auth := r.Header.Get("Authorization")
+		if auth == "" {
+			token := r.URL.Query().Get("access_token")
+			if token != "" {
+				auth = "Bearer " + token
+			}
+		}
+
+		if auth != expected {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
