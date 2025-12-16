@@ -11,13 +11,6 @@ upstreams:
     workdir: ""
     env: []
     auto_approve: false
-    
-  # - name: "local-utils" # Go 实现的本地工具 MCP server 示例
-  #   command: "./bin/local-utils"
-  #   args: []
-  #   workdir: ""
-  #   env: []
-  #   auto_approve: true
 
   - name: "crypto-py" # Python Server
     command: "python3"
