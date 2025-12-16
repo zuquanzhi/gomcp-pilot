@@ -1,5 +1,6 @@
 <div align="center">
   <img src="assets/logo.png" alt="gomcp-pilot logo" width="200" height="auto" />
+  <h1>gomcp-pilot</h1>
   <p>
     <b>一个用 Go 编写的高性能 Model Context Protocol (MCP) 网关</b>
   </p>
@@ -8,10 +9,11 @@
   [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
 </div>
 
+[ [English](.doc/README_EN.md) | **中文** ]
 
 **gomcp-pilot** 是一个用 Go 编写的高性能 Model Context Protocol (MCP) 网关。它旨在连接大语言模型 (LLM) 与本地工具、服务和文件系统。
 
-本项目作为一个 "Pilot"（领航员），充当 AI Agent 与操作系统之间的中间层，提供统一的协议转换、权限控制和可视化监控。
+本项目取名为 "Pilot"，意在充当 AI Agent 的辅助向导：在处理协议转换的同时，提供统一的协议转换、权限控制和可视化监控，帮助开发者更好地理解和控制 AI 的行为。
 
 ## 核心特性
 
