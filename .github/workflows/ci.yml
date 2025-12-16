@@ -1,0 +1,58 @@
+name: GoMCP CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build-go:
+    name: Build Backend (Go)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+
+    - name: Build
+      run: go build -v ./cmd/gomcp
+
+    - name: Test
+      run: go test -v ./...
+
+  build-web:
+    name: Build Frontend (React)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+
+    - name: Install Dependencies
+      working-directory: ./web
+      run: npm install
+
+    - name: Build
+      working-directory: ./web
+      run: npm run build
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [build-go, build-web]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      
+      # 这里可以添加 Docker 构建和推送步骤
+      # 目前仅作为占位符
+      - name: Build Docker image
+        run: echo "Docker build would happen here"

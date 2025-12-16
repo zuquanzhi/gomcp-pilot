@@ -21,8 +21,8 @@ import (
 	"gomcp-pilot/internal/tui"
 )
 
-// Run boots the upstream manager and HTTP server, blocking until context cancellation.
-func Run(ctx context.Context, cfg *config.Config) error {
+// RunTUI boots the upstream manager and HTTP server in TUI mode.
+func RunTUI(ctx context.Context, cfg *config.Config) error {
 	// 1. Initialize Infrastructure
 	if err := logger.InitLogger(); err != nil {
 		return err
@@ -32,13 +32,11 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 	defer store.Close()
 
-	// Redirect standard logger to TUI to avoid screen corruption
-	// We use a simple writer that sends to logger.LogChan
+	// Redirect standard logger to TUI
 	log.SetOutput(&logWriter{})
-	// Also use this logger for the server
 	stdLogger := log.New(&logWriter{}, "[gomcp] ", log.LstdFlags)
 
-	// 2. Initialize Process Manager with Interceptor
+	// 2. Initialize Process Manager with TUI Interceptor
 	manager := process.NewManager()
 	manager.SetInterceptor(func(upstream, tool, args string) bool {
 		// Send request to TUI
@@ -69,12 +67,11 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 	defer manager.StopAll()
 
-	// 3. Start HTTP Server in Background
+	// 3. Start HTTP Server
 	mcpSrv, err := mcpbridge.NewServer(manager)
 	if err != nil {
 		return err
 	}
-
 	srv := server.New(cfg, manager, stdLogger, mcpSrv)
 	go func() {
 		if err := srv.Start(ctx); err != nil {
@@ -90,7 +87,6 @@ func Run(ctx context.Context, cfg *config.Config) error {
 			logger.Global.Error("Failed to list tools", zap.String("upstream", upstream), zap.Error(err))
 			return nil, err
 		}
-		logger.Global.Info("Tools fetched", zap.String("upstream", upstream), zap.Int("count", len(tools)))
 
 		var infos []tui.ToolInfo
 		for _, t := range tools {
@@ -109,6 +105,46 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+// RunHeadless boots the manager and HTTP server without TUI, blocking until signal.
+func RunHeadless(ctx context.Context, cfg *config.Config) error {
+	// 1. Initialize Infrastructure
+	if err := logger.InitLogger(); err != nil {
+		return err
+	}
+	if err := store.InitStore(); err != nil {
+		return err
+	}
+	defer store.Close()
+
+	// Standard logger
+	stdLogger := log.New(os.Stdout, "[gomcp] ", log.LstdFlags)
+
+	// 2. Initialize Process Manager with simple logging interceptor
+	manager := process.NewManager()
+	manager.SetInterceptor(func(upstream, tool, args string) bool {
+		logger.Global.Info("Auto-approving tool call (Headless mode)",
+			zap.String("upstream", upstream),
+			zap.String("tool", tool))
+		return true // Auto-approve in headless mode for now
+	})
+
+	if err := manager.StartAll(ctx, cfg); err != nil {
+		return err
+	}
+	defer manager.StopAll()
+
+	// 3. Start HTTP Server
+	mcpSrv, err := mcpbridge.NewServer(manager)
+	if err != nil {
+		return err
+	}
+	srv := server.New(cfg, manager, stdLogger, mcpSrv)
+
+	// Run server in foreground (blocking) since we don't have TUI to block
+	logger.Global.Info("Running in Headless Mode. Press Ctrl+C to stop.")
+	return srv.Start(ctx)
 }
 
 type logWriter struct{}

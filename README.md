@@ -1,111 +1,119 @@
-# gomcp-pilot: 本地 MCP 网关
+# gomcp-pilot (Go MCP Pilot)
 
-gomcp-pilot 是一个实现了 Model Context Protocol (MCP) 的本地网关服务。它通过标准输入输出 (stdio) 编排管理多个下游 MCP 服务器，并提供统一的 HTTP 接口供上游 AI Agent 调用。
+**gomcp-pilot** 是一个用 Go 编写的高性能 Model Context Protocol (MCP) 网关。它旨在连接大语言模型 (LLM) 与本地工具、服务和文件系统。
 
-该项目包含一个基于终端的用户界面 (TUI)，用于实时监控服务状态、查看日志及进行安全拦截。
+本项目作为一个 "Pilot"（领航员），充当 AI Agent 与操作系统之间的中间层，提供统一的协议转换、权限控制和可视化监控。
 
-## 核心功能
+## 核心特性
 
-*   **安全拦截 (Security Interception)**: 支持对特定上游服务的工具调用进行拦截。当配置为需审批时，TUI 会弹出模态框等待人工确认，防止非预期的高风险操作。
-*   **多语言支持 (Polyglot Support)**: 可同时管理 Go、Python、Node.js 等多种语言编写的 MCP 服务器进程。
-*   **可视化监控**: 提供基于 Bubbletea 的 TUI 面板，展示上游服务的运行状态、调用统计及实时标准输出/错误日志。
-*   **审计与日志**:
-    *   SQLite 本地数据库 (`~/.gomcp/audit.db`): 结构化记录每一次工具调用的请求与响应。
-    *   应用日志 (`~/.gomcp/gomcp.log`): 记录网关自身的运行日志。
-*   **稳定性管理**: 内置进程健康管理，支持启动超时控制与错误捕获。
+*   **高性能网关**: 基于 Go 语言，并发处理多个 Upstream MCP Server。
+*   **多语言支持 (Polyglot)**: 可以连接 Python, Node.js, Go 等任意语言编写的 MCP Server（通过 Stdio）。
+*   **全协议支持**: 
+    *   **Tools**: 动态发现和调用工具。
+    *   **Resources**: 统一聚合和读取资源（如文件、系统状态）。
+    *   **SSE**: 支持 Server-Sent Events 协议，兼容 Claude Desktop 等标准客户端。
+*   **可视化界面**:
+    *   **TUI (终端界面)**: 实时监控 Traffic，拦截请求，查看详细日志。
+    *   **Web Dashboard**: 现代化的 React 界面，浏览工具和资源列表。
+*   **安全可控**:
+    *   Token 鉴权。
+    *   Human-in-the-loop: 关键操作（如文件写入）可配置为需人工批准。
 
 ## 快速开始
 
-### 环境依赖
-*   **Go** 1.23+
-*   **Python 3** (若需运行 Python 示例/客户端)
-*   **Node.js** (若需运行 Node.js 示例/官方文件系统服务)
+### 前置要求
+*   Go 1.23+
+*   Node.js 18+ (用于 Web Dashboard)
+*   Python 3.10+ (用于示例 Server 和 AI Client)
 
-### 安装
+### 开发环境一键启动
 
-1.  克隆代码库并安装相关语言依赖：
-    ```bash
-    # 安装 Node.js 依赖 (用于 filesystem server)
-    ./scripts/install_deps.sh
-    ```
-
-2.  编译本地测试服务 (可选，推荐):
-    ```bash
-    mkdir -p bin
-    go build -o bin/local-utils ./scripts/servers/local_mcp_server.go
-    ```
-
-### 启动服务
-运行主程序启动网关及 TUI：
+我们提供了一个便捷的控制脚本来管理所有服务：
 
 ```bash
-go run ./cmd/gomcp start
+# 1. 启动所有服务 (后端 + 前端) 并挂起在后台
+./scripts/dev/control.sh start
+
+# 2. 查看实时日志
+./scripts/dev/control.sh logs
+
+# 3. 停止所有服务
+./scripts/dev/control.sh stop
+
+# 4. 进入 TUI 交互模式 (会自动停止后台服务以释放端口)
+./scripts/dev/control.sh tui
 ```
 
-### 客户端测试
-项目提供了一个 Python 脚本用于测试与网关的交互。该脚本会自动发现所有注册工具并与兼容 OpenAI 接口的模型进行对话。
+启动后：
+*   **API Gateway**: `http://localhost:8080`
+*   **Web Dashboard**: `http://localhost:5173`
+
+### 手动构建与运行
+
+如果您更喜欢手动操作：
 
 ```bash
-# 配置环境变量
-export OPENAI_API_KEY="sk-..."
-export OPENAI_BASE_URL="https://api.deepseek.com" # 默认为 DeepSeek
+# 编译
+go build -o bin/gomcp ./cmd/gomcp
 
-# 运行交互式客户端
-python3 scripts/ai_agent.py
+# 启动 TUI 模式
+./bin/gomcp start
+
+# 启动无头模式 (Headless Server)
+./bin/gomcp serve
+
+# 启动 Web Dashboard
+cd web && npm install && npm run dev
 ```
 
-## 配置说明
+## 架构
 
-配置文件默认位于 `config.yaml`。该文件定义了网关监听端口及上游服务列表。
+```mermaid
+graph TD
+    Client[AI Client / Claude Desktop] -->|SSE / HTTP| Gateway[gomcp Gateway]
+    Gateway -->|Stdio| S1[Filesystem MCP]
+    Gateway -->|Stdio| S2[Python Crypto Server]
+    Gateway -->|Stdio| S3[Node.js Math Server]
+    Gateway -->|Websocket?| Web[Web Dashboard]
+```
+
+## 配置文件 (`config.yaml`)
 
 ```yaml
 port: 8080
-auth_token: "TEST" # HTTP API 鉴权 Token
+auth_token: "TEST" # 简单的 Bearer Token 鉴权
 
 upstreams:
-  # 示例：官方 Node.js 文件系统服务
   - name: "filesystem"
-    command: "node"
-    args: ["./local_servers/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js", "."]
-    auto_approve: false  # 设置为 false 时，调用需在 TUI 中人工确认
+    command: "./bin/gomcp"
+    args: ["stdio"]
+    env: []
+    auto_approve: false # TUI 模式下需要人工批准
 
-  # 示例：Python 实现的加密工具服务
   - name: "crypto-py"
     command: "python3"
     args: ["scripts/servers/crypto_server.py"]
-    auto_approve: true   # 设置为 true 时，自动放行调用
+    auto_approve: true
 
-  # 示例：Node.js 实现的数学服务
   - name: "math-js"
     command: "node"
     args: ["scripts/servers/math_server.js"]
     auto_approve: true
 ```
 
-## 项目结构
+## API 参考
 
-*   `cmd/gomcp`: 程序入口
-*   `internal/app`: 应用生命周期管理
-*   `internal/mcpbridge`: MCP 协议桥接与转发逻辑
-*   `internal/process`: 子进程生命周期管理
-*   `internal/tui`: 终端用户界面实现
-*   `internal/store`: SQLite 审计存储
-*   `scripts/servers`: 多语言 MCP 服务器参考实现
+*   `GET /tools/list?upstream=name`: 获取工具列表
+*   `POST /tools/call`: 调用工具
+*   `GET /resources/list?upstream=name`: 获取资源列表
+*   `GET /resources/read?uri=...`: 读取资源内容
+*   `GET /sse`: MCP SSE 端点
 
-## API 接口
-
-网关提供以下 HTTP 接口：
-
-*   `GET /tools/list`: 获取工具列表
-    *   返回所有已注册上游服务的工具定义。
-
-*   `GET /sse`: Server-Sent Events (SSE) 端点
-    *   用于建立 MCP 长连接，接收服务器推送。
+## 状态
+目前项目处于 **Active Development** 阶段。已完成核心协议对接和多语言 Server 集成。
     *   Header: `Authorization: Bearer <token>`
 
 *   `POST /mcp/message`: MCPJSON-RPC 消息端点
     *   用于发送标准 MCP 协议消息 (如 `tools/call`, `initialize`)。
-    *   通常配合 SSE 使用。
-
 *   `POST /tools/call`: (Legacy) 简易工具调用接口
     *   Body: `{"upstream": "name", "tool": "func_name", "arguments": {...}}`
