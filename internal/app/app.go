@@ -79,10 +79,14 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	// Tool Fetcher closure
 	toolFetcher := func(upstream string) ([]tui.ToolInfo, error) {
+		logger.Global.Info("Fetching tools for upstream", zap.String("upstream", upstream))
 		tools, err := manager.ListTools(upstream)
 		if err != nil {
+			logger.Global.Error("Failed to list tools", zap.String("upstream", upstream), zap.Error(err))
 			return nil, err
 		}
+		logger.Global.Info("Tools fetched", zap.String("upstream", upstream), zap.Int("count", len(tools)))
+
 		var infos []tui.ToolInfo
 		for _, t := range tools {
 			infos = append(infos, tui.ToolInfo{
@@ -94,7 +98,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 
 	// 4. Start TUI (Blocks until quit)
-	p := tea.NewProgram(tui.InitialModel(cfg, toolFetcher), tea.WithAltScreen())
+	p := tea.NewProgram(tui.InitialModel(cfg, toolFetcher), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		return err
 	}

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -31,6 +32,7 @@ type UpstreamStatus struct {
 	Status    string // "Running", "Stopped", "Error"
 	CallCount int
 	LastCall  time.Time
+	Config    config.Upstream
 }
 
 // ToolInfo simplified struct for display
@@ -45,6 +47,10 @@ type Model struct {
 	quitting       bool
 	width          int
 	height         int
+
+	// Viewports
+	logViewport    viewport.Model
+	detailViewport viewport.Model
 
 	// App State
 	upstreams []UpstreamStatus
@@ -67,6 +73,7 @@ func InitialModel(cfg *config.Config, fetcher func(upstream string) ([]ToolInfo,
 			ups = append(ups, UpstreamStatus{
 				Name:   u.Name,
 				Status: "Running", // Assume running on start for now
+				Config: u,
 			})
 		}
 	}
@@ -77,6 +84,9 @@ func InitialModel(cfg *config.Config, fetcher func(upstream string) ([]ToolInfo,
 		upstreams:   ups,
 		toolFetcher: fetcher,
 		selectedIdx: 0,
+		// Viewports initialized with default 0 size; resized on WindowSizeMsg
+		logViewport:    viewport.New(0, 0),
+		detailViewport: viewport.New(0, 0),
 	}
 }
 
@@ -115,6 +125,8 @@ func (m Model) fetchToolsCmd(upstream string) tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if m.requestPending != nil {
@@ -131,39 +143,108 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Navigation
+		// Global keys
+		switch msg.String() {
+		case "q", "ctrl+c":
+			m.quitting = true
+			return m, tea.Quit
+		case "enter", "space":
+			m.showDetails = !m.showDetails
+			if m.showDetails {
+				return m, m.fetchToolsCmd(m.upstreams[m.selectedIdx].Name)
+			}
+		case "pgup":
+			m.logViewport.HalfViewUp()
+			m.detailViewport.HalfViewUp()
+		case "pgdown":
+			m.logViewport.HalfViewDown()
+			m.detailViewport.HalfViewDown()
+		}
+
+		// Navigation (Sidebar) - Consumes Up/Down/j/k
+		// We do NOT forward these to viewport to avoid double scrolling/conflict
 		switch msg.String() {
 		case "up", "k":
 			if m.selectedIdx > 0 {
 				m.selectedIdx--
+				// Reset details scroll to top when switching
+				m.detailViewport.GotoTop()
 				if m.showDetails {
-					return m, m.fetchToolsCmd(m.upstreams[m.selectedIdx].Name)
+					cmds = append(cmds, m.fetchToolsCmd(m.upstreams[m.selectedIdx].Name))
 				}
 			}
+			return m, tea.Batch(cmds...) // Return early, don't pass to viewport
 		case "down", "j":
 			if m.selectedIdx < len(m.upstreams)-1 {
 				m.selectedIdx++
+				// Reset details scroll to top when switching
+				m.detailViewport.GotoTop()
 				if m.showDetails {
-					return m, m.fetchToolsCmd(m.upstreams[m.selectedIdx].Name)
+					cmds = append(cmds, m.fetchToolsCmd(m.upstreams[m.selectedIdx].Name))
 				}
 			}
-		case "enter", "space":
-			m.showDetails = !m.showDetails
-			if m.showDetails {
-				// Trigger fetch
-				return m, m.fetchToolsCmd(m.upstreams[m.selectedIdx].Name)
-			}
-		case "q", "ctrl+c":
-			m.quitting = true
-			return m, tea.Quit
+			return m, tea.Batch(cmds...) // Return early
 		}
+
+		// Other keys - Pass to Viewport
+		var cmd tea.Cmd
+		m.logViewport, cmd = m.logViewport.Update(msg)
+		cmds = append(cmds, cmd)
+
+		m.detailViewport, cmd = m.detailViewport.Update(msg)
+		cmds = append(cmds, cmd)
+
+	case tea.MouseMsg:
+		if msg.Type == tea.MouseWheelUp {
+			m.logViewport.LineUp(3)
+			m.detailViewport.LineUp(3)
+		} else if msg.Type == tea.MouseWheelDown {
+			m.logViewport.LineDown(3)
+			m.detailViewport.LineDown(3)
+		}
+
+		// Pass to viewport as well, just in case (though we handled scroll essentially)
+		var cmd tea.Cmd
+		m.logViewport, cmd = m.logViewport.Update(msg)
+		cmds = append(cmds, cmd)
+
+		m.detailViewport, cmd = m.detailViewport.Update(msg)
+		cmds = append(cmds, cmd)
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 
+		// Recalculate layout
+		// Sidebar fixed at 25
+		sidebarWidth := 25
+		// Header (1 line text + 1 line margin) = 2
+		headerHeight := 2
+
+		mainWidth := m.width - sidebarWidth - 4
+		if mainWidth < 10 {
+			mainWidth = 10
+		}
+
+		mainHeight := m.height - headerHeight
+		if mainHeight < 5 {
+			mainHeight = 5
+		}
+
+		m.logViewport.Width = mainWidth
+		m.logViewport.Height = mainHeight
+
+		m.detailViewport.Width = mainWidth
+		m.detailViewport.Height = mainHeight
+
+		// Force re-render content for new width wrap
+		// Also ensure we aren't showing stale empty content if we have data?
+		// Note: init doesn't fetch, so this is fine.
+		m.logViewport.SetContent(m.renderLogContent())
+		m.detailViewport.SetContent(m.renderDetailContent())
+
 	case tickMsg:
-		return m, tickCmd()
+		cmds = append(cmds, tickCmd())
 
 	case toolsFetchedMsg:
 		// Only update if still selected (simple consistency check)
@@ -175,6 +256,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.fetchError = ""
 				m.currentTools = msg.tools
 			}
+			m.detailViewport.SetContent(m.renderDetailContent())
 		}
 
 	case logger.LogEntry:
@@ -196,10 +278,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.logs = append(m.logs, line)
 		// Keep a decent buffer
-		if len(m.logs) > 50 {
-			m.logs = m.logs[len(m.logs)-50:]
+		if len(m.logs) > 1000 {
+			m.logs = m.logs[len(m.logs)-1000:]
 		}
-		return m, waitForLog()
+
+		m.logViewport.SetContent(m.renderLogContent())
+		// Auto-scroll to bottom if we were already there or close to it?
+		// For simplicity, always auto-scroll for logs unless user scrolled up
+		// Viewport logic: if AtBottom(), keep AtBottom.
+		// Since we don't have complex logic here easily, let's just goto bottom for now.
+		m.logViewport.GotoBottom()
+
+		cmds = append(cmds, waitForLog())
 
 	case InterceptRequest:
 		m.requestPending = &msg
@@ -210,10 +300,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.upstreams[i].LastCall = time.Now()
 			}
 		}
-		return m, nil
+		// Refresh details because stats changed
+		m.detailViewport.SetContent(m.renderDetailContent())
 	}
 
-	return m, nil
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) View() string {
@@ -227,27 +318,12 @@ func (m Model) View() string {
 
 	header := m.renderHeader()
 	sidebar := m.renderSidebar()
-	var mainContent string
-
-	if m.showDetails {
-		mainContent = m.renderDetailView()
-	} else {
-		mainContent = m.renderLogView()
-	}
-
-	// Calculate dynamic widths
-	// Sidebar is fixed width in style (25)
-	mainWidth := m.width - 25 - 4 // minus margins/borders
-	if mainWidth < 10 {
-		mainWidth = 10
-	}
 
 	var mainPane string
 	if m.showDetails {
-		// Details view doesn't have the log pane border usually, but let's keep it consistent
-		mainPane = styleLogPane.Width(mainWidth).Render(mainContent)
+		mainPane = styleLogPane.Width(m.detailViewport.Width).Render(m.detailViewport.View())
 	} else {
-		mainPane = styleLogPane.Width(mainWidth).Render(mainContent)
+		mainPane = styleLogPane.Width(m.logViewport.Width).Render(m.logViewport.View())
 	}
 
 	body := lipgloss.JoinHorizontal(
@@ -256,11 +332,11 @@ func (m Model) View() string {
 		mainPane,
 	)
 
-	return styleApp.Render(lipgloss.JoinVertical(
+	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
 		body,
-	))
+	)
 }
 
 func (m Model) renderHeader() string {
@@ -272,17 +348,21 @@ func (m Model) renderHeader() string {
 	if m.showDetails {
 		mode = "DETAIL INSPECTOR"
 	}
-
 	right := lipgloss.NewStyle().Foreground(cForeground).Render(mode)
 
-	// Padding
 	pad := m.width - lipgloss.Width(title) - lipgloss.Width(status) - lipgloss.Width(right) - 4
 	if pad < 1 {
 		pad = 1
 	}
 	space := strings.Repeat(" ", pad)
 
-	return styleHeader.Width(m.width).Render(fmt.Sprintf("%s %s%s%s", title, status, space, right))
+	style := styleHeader
+	if m.width > 0 {
+		// Use width-1 to avoid accidental wrapping at the exact edge o	if m.width > 0 {
+		// Use width-1 to avoid accidental wrapping at the exact edge of the terminal
+		style = style.Width(m.width - 1)
+	}
+	return style.Render(fmt.Sprintf("%s %s%s%s", title, status, space, right))
 }
 
 func (m Model) renderSidebar() string {
@@ -301,7 +381,6 @@ func (m Model) renderSidebar() string {
 
 		line := fmt.Sprintf("%s %s", icon, name)
 
-		// Highlight selected
 		if i == m.selectedIdx {
 			line = "> " + line
 			line = lipgloss.NewStyle().Foreground(cHighlight).Bold(true).Render(line)
@@ -318,7 +397,15 @@ func (m Model) renderSidebar() string {
 	return styleSidebar.Render(s)
 }
 
-func (m Model) renderDetailView() string {
+func (m Model) renderLogContent() string {
+	// Simple join
+	if len(m.logs) == 0 {
+		return "No logs yet..."
+	}
+	return strings.Join(m.logs, "\n")
+}
+
+func (m Model) renderDetailContent() string {
 	if m.selectedIdx >= len(m.upstreams) {
 		return "No selection"
 	}
@@ -331,6 +418,18 @@ func (m Model) renderDetailView() string {
 	s += fmt.Sprintf("Calls:      %d\n", u.CallCount)
 	s += fmt.Sprintf("Last Call:  %s\n\n", u.LastCall.Format("15:04:05"))
 
+	// Config
+	kStyle := lipgloss.NewStyle().Foreground(cComment)
+	vStyle := lipgloss.NewStyle().Foreground(cForeground)
+
+	s += lipgloss.NewStyle().Foreground(cForeground).Bold(true).Render("CONFIGURATION:") + "\n"
+	s += fmt.Sprintf("%s %s\n", kStyle.Render("Command:"), vStyle.Render(u.Config.Command))
+	s += fmt.Sprintf("%s    %s\n", kStyle.Render("Args:"), vStyle.Render(strings.Join(u.Config.Args, " ")))
+	if u.Config.Workdir != "" {
+		s += fmt.Sprintf("%s %s\n", kStyle.Render("Workdir:"), vStyle.Render(u.Config.Workdir))
+	}
+	s += "\n"
+
 	// Tools
 	s += lipgloss.NewStyle().Foreground(cForeground).Bold(true).Render("AVAILABLE TOOLS:") + "\n"
 
@@ -342,26 +441,22 @@ func (m Model) renderDetailView() string {
 		for _, t := range m.currentTools {
 			s += fmt.Sprintf("• %s\n", lipgloss.NewStyle().Foreground(cHighlight).Render(t.Name))
 			if t.Description != "" {
-				// Wrap description gently?
-				desc := t.Description
-				if len(desc) > 60 {
-					desc = desc[:57] + "..."
+				// Explicitly wrap description to viewport width
+				// Viewport width might technically include padding logic in SetContent if styleLogPane has padding.
+				// styleLogPane has PaddingLeft(1). So effectively available is Width-1.
+				wrapWidth := m.detailViewport.Width - 2
+				if wrapWidth < 10 {
+					wrapWidth = 10
 				}
-				s += fmt.Sprintf("  %s\n", lipgloss.NewStyle().Foreground(cComment).Render(desc))
+
+				descStyle := lipgloss.NewStyle().Foreground(cComment).Width(wrapWidth)
+				s += fmt.Sprintf("  %s\n", descStyle.Render(t.Description))
 			}
 			s += "\n"
 		}
 	}
 
 	return s
-}
-
-func (m Model) renderLogView() string {
-	// Simple join
-	if len(m.logs) == 0 {
-		return "No logs yet..."
-	}
-	return strings.Join(m.logs, "\n")
 }
 
 func (m Model) renderInterceptModal() string {
