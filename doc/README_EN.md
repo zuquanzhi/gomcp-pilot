@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/logo.png" alt="gomcp-pilot logo" width="200" height="auto" />
+  <img src="../assets/logo.png" alt="gomcp-pilot logo" width="200" height="auto" />
   <h1>gomcp-pilot</h1>
   <p>
     <b>A high-performance Model Context Protocol (MCP) gateway written in Go</b>
