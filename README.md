@@ -1,6 +1,6 @@
 <div align="center">
   <img src="assets/logo.png" alt="gomcp-pilot logo" width="200" height="auto" />
-  <h1>gomcp-pilot</h1>
+  <h1></h1>
   <p>
     <b>一个用 Go 编写的高性能 Model Context Protocol (MCP) 网关</b>
   </p>
