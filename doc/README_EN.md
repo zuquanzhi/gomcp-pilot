@@ -7,9 +7,9 @@
 
   [![Go Version](https://img.shields.io/github/go-mod/go-version/zuquanzhi/gomcp-pilot?style=flat-square)](go.mod)
   [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-</div>
 
-[ **English** | [中文](../README.md) ]
+  [ **English** | [中文](../README.md) ]
+</div>
 
 **gomcp-pilot** is a high-performance Model Context Protocol (MCP) gateway written in Go. It is designed to connect Large Language Models (LLMs) with local tools, services, and file systems.
 
