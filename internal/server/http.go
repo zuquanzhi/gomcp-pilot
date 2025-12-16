@@ -10,17 +10,20 @@ import (
 
 	"gomcp-pilot/internal/config"
 	"gomcp-pilot/internal/process"
+
+	mcpserver "github.com/mark3labs/mcp-go/server"
 )
 
 // Server exposes HTTP endpoints for MCP tool discovery and invocation.
 type Server struct {
-	cfg     *config.Config
-	manager *process.Manager
-	logger  *log.Logger
+	cfg       *config.Config
+	manager   *process.Manager
+	logger    *log.Logger
+	mcpServer *mcpserver.MCPServer
 }
 
-func New(cfg *config.Config, manager *process.Manager, logger *log.Logger) *Server {
-	return &Server{cfg: cfg, manager: manager, logger: logger}
+func New(cfg *config.Config, manager *process.Manager, logger *log.Logger, mcpServer *mcpserver.MCPServer) *Server {
+	return &Server{cfg: cfg, manager: manager, logger: logger, mcpServer: mcpServer}
 }
 
 // Start runs the HTTP server until the context is cancelled.
@@ -29,6 +32,21 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/tools/list", s.handleListTools)
 	mux.HandleFunc("/tools/call", s.handleCallTool)
+
+	// Add SSE support
+	if s.mcpServer != nil {
+		// The endpoint URL that clients should post messages to.
+		// Constructing it based on config port.
+		endpointURL := fmt.Sprintf("http://localhost:%d/mcp/message", s.cfg.Port)
+		sseServer := mcpserver.NewSSEServer(
+			s.mcpServer,
+			mcpserver.WithMessageEndpoint(endpointURL),
+		)
+
+		mux.Handle("/sse", sseServer.SSEHandler())
+		mux.Handle("/mcp/message", sseServer.MessageHandler())
+		s.logger.Printf("SSE endpoint mounted at /sse (message endpoint: %s)", endpointURL)
+	}
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.cfg.Port),

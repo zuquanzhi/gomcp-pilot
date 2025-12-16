@@ -99,13 +99,13 @@ upstreams:
 *   `GET /tools/list`: 获取工具列表
     *   返回所有已注册上游服务的工具定义。
 
-*   `POST /tools/call`: 工具调用
+*   `GET /sse`: Server-Sent Events (SSE) 端点
+    *   用于建立 MCP 长连接，接收服务器推送。
     *   Header: `Authorization: Bearer <token>`
-    *   Body:
-        ```json
-        {
-          "upstream": "filesystem",
-          "tool": "list_directory",
-          "arguments": { "path": "." }
-        }
-        ```
+
+*   `POST /mcp/message`: MCPJSON-RPC 消息端点
+    *   用于发送标准 MCP 协议消息 (如 `tools/call`, `initialize`)。
+    *   通常配合 SSE 使用。
+
+*   `POST /tools/call`: (Legacy) 简易工具调用接口
+    *   Body: `{"upstream": "name", "tool": "func_name", "arguments": {...}}`

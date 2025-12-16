@@ -70,10 +70,15 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	defer manager.StopAll()
 
 	// 3. Start HTTP Server in Background
-	srv := server.New(cfg, manager, stdLogger)
+	mcpSrv, err := mcpbridge.NewServer(manager)
+	if err != nil {
+		return err
+	}
+
+	srv := server.New(cfg, manager, stdLogger, mcpSrv)
 	go func() {
 		if err := srv.Start(ctx); err != nil {
-			logger.Global.Error("HTTP server error", zap.Error(err))
+			logger.Global.Error("HTTP server failed to start", zap.String("error", err.Error()))
 		}
 	}()
 
