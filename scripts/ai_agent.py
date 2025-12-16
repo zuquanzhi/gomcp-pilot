@@ -202,7 +202,7 @@ def chat_loop():
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
-                        "content": result
+                        "content": str(result)
                     })
                 
                 # Second turn (with results)

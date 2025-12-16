@@ -11,8 +11,10 @@ import (
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
+	"go.uber.org/zap"
 
 	"gomcp-pilot/internal/config"
+	"gomcp-pilot/internal/logger"
 )
 
 // CallRequest represents a tool invocation against a specific upstream.
@@ -111,6 +113,10 @@ func (m *Manager) CallTool(ctx context.Context, req CallRequest) (*mcp.CallToolR
 	m.mu.RLock()
 	ups := m.upstreams[req.Upstream]
 	m.mu.RUnlock()
+	logger.Global.Info("Processing tool call",
+		zap.String("upstream", req.Upstream),
+		zap.String("tool", req.Tool))
+
 	if ups == nil {
 		return nil, fmt.Errorf("upstream %s not found", req.Upstream)
 	}
@@ -126,15 +132,53 @@ func (m *Manager) CallTool(ctx context.Context, req CallRequest) (*mcp.CallToolR
 	defer cancel()
 
 	// Interception Logic
+	argBytes, _ := json.Marshal(req.Arguments)
+	argStr := string(argBytes)
+
 	if !ups.cfg.AutoApprove && m.interceptor != nil {
-		// Convert args to string for display/interception
-		argBytes, _ := json.Marshal(req.Arguments)
-		if !m.interceptor(req.Upstream, req.Tool, string(argBytes)) {
+		if !m.interceptor(req.Upstream, req.Tool, argStr) {
+			logger.Global.Warn("Tool call intercepted and denied",
+				zap.String("upstream", req.Upstream),
+				zap.String("tool", req.Tool))
 			return nil, fmt.Errorf("operation denied by user")
 		}
 	}
 
-	return ups.client.CallTool(ctx, callReq)
+	logger.Global.Info(fmt.Sprintf(">> Calling MCP: %s/%s %s", req.Upstream, req.Tool, argStr))
+
+	start := time.Now()
+	res, err := ups.client.CallTool(ctx, callReq)
+	duration := time.Since(start)
+
+	if err != nil {
+		logger.Global.Error(fmt.Sprintf("<< Error: %v", err),
+			zap.String("upstream", req.Upstream),
+			zap.String("tool", req.Tool))
+		return nil, err
+	}
+
+	// Try to get a string representation of the result content for logging
+	var resStr string
+	if len(res.Content) > 0 {
+		// Just take the first bit of textcontent or image info
+		if txt, ok := res.Content[0].(mcp.TextContent); ok {
+			resStr = txt.Text
+			if len(resStr) > 100 {
+				resStr = resStr[:100] + "..."
+			}
+		} else {
+			resStr = "[Binary/Image Content]"
+		}
+	} else {
+		resStr = "[No Content]"
+	}
+
+	logger.Global.Info(fmt.Sprintf("<< Result: %s", resStr),
+		zap.String("upstream", req.Upstream),
+		zap.String("tool", req.Tool),
+		zap.Duration("duration", duration))
+
+	return res, nil
 
 }
 
