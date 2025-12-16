@@ -7,14 +7,21 @@ auth_token: "TEST"
 upstreams:
   - name: "filesystem"
     command: "npx"
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "/Users/zuquanzhi/test"]
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "."]
+    workdir: ""
+    env: []
+    auto_approve: false # Write operations typically require approval
+
+  - name: "crypto-py" # Python Server Example
+    command: "python3"
+    args: ["scripts/servers/crypto_server.py"]
     workdir: ""
     env: []
     auto_approve: true
-    
-  - name: "local-utils" # Go 实现的本地工具 MCP server 示例
-    command: "go"
-    args: ["run", "./scripts/local_mcp_server.go"]
+
+  - name: "math-js" # Node.js Server Example
+    command: "node"
+    args: ["scripts/servers/math_server.js"]
     workdir: ""
     env: []
     auto_approve: true

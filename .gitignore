@@ -22,6 +22,7 @@ local_servers/
 # Logs/temp
 *.log
 tmp/
+logs
 
 # Web artifacts
 web/node_modules/

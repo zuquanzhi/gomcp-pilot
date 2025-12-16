@@ -1,4 +1,15 @@
-# gomcp-pilot (Go MCP Pilot)
+<div align="center">
+  <img src="assets/logo.png" alt="gomcp-pilot logo" width="200" height="auto" />
+  <h1>gomcp-pilot</h1>
+  <p>
+    <b>一个用 Go 编写的高性能 Model Context Protocol (MCP) 网关</b>
+  </p>
+
+  [![Go Version](https://img.shields.io/github/go-mod/go-version/zuquanzhi/gomcp-pilot?style=flat-square)](go.mod)
+  [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
+</div>
+
+**gomcp-pilot** (Go MCP Pilot)
 
 **gomcp-pilot** 是一个用 Go 编写的高性能 Model Context Protocol (MCP) 网关。它旨在连接大语言模型 (LLM) 与本地工具、服务和文件系统。
 
@@ -101,19 +112,37 @@ upstreams:
     auto_approve: true
 ```
 
+## Roadmap
+
+### Phase 1: Core Foundation (已完成)
+- [x] **MCP Protocol**: 完整实现 MCP 协议核心 (Client & Server)。
+- [x] **Gateway Transport**: 支持 Stdio 传输协议，稳定连接本地进程。
+- [x] **Polyglot Support**: 完美支持 Python, Node.js, Go 等多语言 Server。
+- [x] **SSE Integration**: 实现 Server-Sent Events，兼容 Claude Desktop。
+
+### Phase 2: Observability & Control (已完成)
+- [x] **TUI Monitor**: 强大的终端交互界面，流量实时监控。
+- [x] **Web Dashboard**: 基于 React 的现代化管理面板。
+- [x] **Human-in-the-loop**: 敏感操作人工审批机制。
+- [x] **Configuration**: 灵活的 YAML 配置管理。
+
+### Phase 3: Advanced Features (开发中)
+- [ ] **Remote Upstreams**: 支持通过 HTTP/SSE 连接远程 MCP Server。
+- [ ] **Advanced Auth**: 集成 OAuth2 或更细粒度的 API Key 管理。
+- [ ] **Plugin System**: 支持自定义中间件插件。
+- [ ] **Docker Support**: 提供标准 Docker 镜像与 K8s 部署清单。
+- [ ] **WebSockets**: 全双工通信支持，提升实时性。
+
 ## API 参考
 
-*   `GET /tools/list?upstream=name`: 获取工具列表
-*   `POST /tools/call`: 调用工具
-*   `GET /resources/list?upstream=name`: 获取资源列表
-*   `GET /resources/read?uri=...`: 读取资源内容
-*   `GET /sse`: MCP SSE 端点
+### Core Endpoints
+*   `GET /sse`: MCP SSE 接入点 (Client 连接此处)
+*   `POST /mcp/message`: JSON-RPC 消息交互端点
 
-## 状态
-目前项目处于 **Active Development** 阶段。已完成核心协议对接和多语言 Server 集成。
-    *   Header: `Authorization: Bearer <token>`
+### Legacy / Debug Endpoints
+*   `GET /tools/list?upstream=name`
+*   `POST /tools/call`
+*   `GET /resources/list?upstream=name`
+*   `GET /resources/read?uri=...`
 
-*   `POST /mcp/message`: MCPJSON-RPC 消息端点
-    *   用于发送标准 MCP 协议消息 (如 `tools/call`, `initialize`)。
-*   `POST /tools/call`: (Legacy) 简易工具调用接口
-    *   Body: `{"upstream": "name", "tool": "func_name", "arguments": {...}}`
+所有接口均需携带 Header: `Authorization: Bearer <token>`
