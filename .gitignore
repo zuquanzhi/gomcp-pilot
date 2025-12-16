@@ -34,3 +34,6 @@ web/.env.local
 .env
 
 web/public/
+
+config.yaml
+
