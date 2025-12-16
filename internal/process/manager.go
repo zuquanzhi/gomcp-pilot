@@ -77,6 +77,54 @@ func (m *Manager) StopAll() {
 	}
 }
 
+// ResourceDescriptor represents an available resource from an upstream.
+type ResourceDescriptor struct {
+	Upstream    string `json:"upstream"`
+	Name        string `json:"name"`
+	Uri         string `json:"uri"`
+	MimeType    string `json:"mimeType,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// ListResources aggregates resources across upstreams.
+func (m *Manager) ListResources(upstreamFilter string) ([]ResourceDescriptor, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var result []ResourceDescriptor
+	for name, ups := range m.upstreams {
+		if upstreamFilter != "" && name != upstreamFilter {
+			continue
+		}
+
+		// Resources are fetched dynamically or cached?
+		// mcp-go client doesn't seem to cache resources automatically like tools in some examples.
+		// We should fetch them on demand.
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		res, err := ups.client.ListResources(ctx, mcp.ListResourcesRequest{})
+		cancel()
+		if err != nil {
+			// Log error but continue with other upstreams? Or fail?
+			// For now, let's log and continue
+			logger.Global.Warn("Failed to list resources", zap.String("upstream", name), zap.Error(err))
+			continue
+		}
+
+		for _, r := range res.Resources {
+			result = append(result, ResourceDescriptor{
+				Upstream:    name,
+				Name:        r.Name,
+				Uri:         r.URI,
+				MimeType:    r.MIMEType,
+				Description: r.Description,
+			})
+		}
+	}
+
+	return result, nil
+}
+
 // ListTools aggregates tools across upstreams. If upstreamFilter is non-empty, only
 // that upstream is returned.
 func (m *Manager) ListTools(upstreamFilter string) ([]ToolDescriptor, error) {
@@ -180,6 +228,38 @@ func (m *Manager) CallTool(ctx context.Context, req CallRequest) (*mcp.CallToolR
 
 	return res, nil
 
+}
+
+// ReadResource attempts to read a resource from any upstream that has it.
+func (m *Manager) ReadResource(ctx context.Context, uri string) (*mcp.ReadResourceResult, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Naive approach: try all upstreams.
+	// Optimization: This could be slow. Future work: cache URI->Upstream mapping.
+	for name, ups := range m.upstreams {
+		req := mcp.ReadResourceRequest{
+			Request: mcp.Request{Method: string(mcp.MethodResourcesRead)},
+			Params: mcp.ReadResourceParams{
+				URI: uri,
+			},
+		}
+
+		// Set a short timeout for the check/read
+		readCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		res, err := ups.client.ReadResource(readCtx, req)
+		cancel()
+
+		if err == nil {
+			logger.Global.Info("ReadResource success", zap.String("upstream", name), zap.String("uri", uri))
+			return res, nil
+		}
+		// If error is "not found", continue. If other error, log?
+		// Most MCP servers might return error if URI doesn't match.
+		// We continue to next upstream.
+	}
+
+	return nil, fmt.Errorf("resource not found: %s", uri)
 }
 
 func (m *Manager) startOne(ctx context.Context, ups config.Upstream) error {

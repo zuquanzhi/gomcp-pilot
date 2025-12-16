@@ -105,6 +105,13 @@ rl.on('line', (line) => {
             return;
         }
 
+        // Fallback for unknown methods
+        console.log(JSON.stringify({
+            jsonrpc: "2.0",
+            id: id,
+            error: { code: -32601, message: `Method ${method} not found` }
+        }));
+
     } catch (e) {
         log("Error parsing: " + e);
     }

@@ -20,6 +20,7 @@ func NewServer(pm *process.Manager) (*server.MCPServer, error) {
 		"gomcp-pilot",
 		"0.1.0",
 		server.WithToolCapabilities(true),
+		server.WithResourceCapabilities(true, true),
 		server.WithRecovery(),
 	)
 
@@ -72,6 +73,34 @@ func NewServer(pm *process.Manager) (*server.MCPServer, error) {
 		}
 
 		s.AddTool(mcpTool, handler)
+	}
+
+	// Register Resource Handlers
+	resources, err := pm.ListResources("")
+	if err != nil {
+		// Log warning but proceed, as resources are optional
+		// We can't log easily here as we don't have logger passed in, but we can print or ignore
+		// Default to ignoring error and just registering what we have
+	}
+
+	for _, r := range resources {
+		resource := mcp.Resource{
+			URI:         r.Uri,
+			Name:        r.Name,
+			Description: r.Description,
+			MIMEType:    r.MimeType,
+		}
+
+		// Explicitly type the handler to get better error messages if signature mismatches
+		var handler server.ResourceHandlerFunc = func(ctx context.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+			res, err := pm.ReadResource(ctx, req.Params.URI)
+			if err != nil {
+				return nil, err
+			}
+			return res.Contents, nil
+		}
+
+		s.AddResource(resource, handler)
 	}
 
 	return s, nil

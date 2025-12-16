@@ -111,6 +111,15 @@ def handle_request(line):
         sys.stdout.flush()
         return
 
+    # Fallback for unknown methods
+    resp = {
+        "jsonrpc": "2.0",
+        "id": req_id,
+        "error": {"code": -32601, "message": f"Method {method} not found"}
+    }
+    print(json.dumps(resp))
+    sys.stdout.flush()
+
 def main():
     log("Starting crypto server...")
     for line in sys.stdin:

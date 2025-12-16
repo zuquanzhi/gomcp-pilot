@@ -32,6 +32,8 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/tools/list", s.handleListTools)
 	mux.HandleFunc("/tools/call", s.handleCallTool)
+	mux.HandleFunc("/resources/list", s.handleListResources)
+	mux.HandleFunc("/resources/read", s.handleReadResource)
 
 	// Add SSE support
 	if s.mcpServer != nil {
@@ -78,6 +80,31 @@ func (s *Server) handleListTools(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, tools)
+}
+
+func (s *Server) handleListResources(w http.ResponseWriter, r *http.Request) {
+	upstream := r.URL.Query().Get("upstream")
+	resources, err := s.manager.ListResources(upstream)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, map[string]interface{}{"resources": resources})
+}
+
+func (s *Server) handleReadResource(w http.ResponseWriter, r *http.Request) {
+	uri := r.URL.Query().Get("uri")
+	if uri == "" {
+		http.Error(w, "uri required", http.StatusBadRequest)
+		return
+	}
+
+	res, err := s.manager.ReadResource(r.Context(), uri)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, res)
 }
 
 type callPayload struct {
