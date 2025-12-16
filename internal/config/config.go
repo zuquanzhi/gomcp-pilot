@@ -26,8 +26,12 @@ type Upstream struct {
 	AutoApprove bool     `yaml:"auto_approve"`
 }
 
-// DefaultPath returns the default config file path under ~/.config/gomcp/config.yaml.
+// DefaultPath returns "./config.yaml" if present, otherwise ~/.config/gomcp/config.yaml.
 func DefaultPath() string {
+	if _, err := os.Stat("config.yaml"); err == nil {
+		return "config.yaml"
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "./config.yaml"

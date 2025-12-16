@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"time"
+
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
 	"gomcp-pilot/internal/process"
+	"gomcp-pilot/internal/store"
 )
 
 // NewServer builds an MCP server that forwards calls to upstream MCP servers via the process manager.
@@ -40,11 +43,28 @@ func NewServer(pm *process.Manager) (*server.MCPServer, error) {
 		}
 
 		handler := func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			start := time.Now()
+			argsBytes, _ := json.Marshal(req.GetRawArguments())
+			argsStr := string(argsBytes)
+
 			result, err := pm.CallTool(ctx, process.CallRequest{
 				Upstream:  upstreamName,
 				Tool:      toolName,
 				Arguments: req.GetRawArguments(),
 			})
+
+			duration := time.Since(start)
+			status := "success"
+			errStr := ""
+			if err != nil {
+				status = "error"
+				errStr = err.Error()
+			}
+
+			// Async log to not block response too much, or sync for safety?
+			// Sync is safer for audit.
+			_ = store.RecordCall(upstreamName, toolName, argsStr, status, errStr, duration)
+
 			if err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

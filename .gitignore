@@ -9,6 +9,9 @@ bin/
 # Module artifacts
 go.sum
 
+# MCP server artifacts
+local_servers/
+
 # Editor/OS
 .idea/
 .vscode/

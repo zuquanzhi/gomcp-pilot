@@ -2,8 +2,8 @@ package process
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"sync"
 	"time"
@@ -33,8 +33,9 @@ type ToolDescriptor struct {
 
 // Manager owns the lifecycle of all upstream MCP clients.
 type Manager struct {
-	mu        sync.RWMutex
-	upstreams map[string]*upstreamClient
+	mu          sync.RWMutex
+	upstreams   map[string]*upstreamClient
+	interceptor func(upstream, tool, args string) bool // Returns true if allowed
 }
 
 type upstreamClient struct {
@@ -48,6 +49,10 @@ func NewManager() *Manager {
 	return &Manager{
 		upstreams: make(map[string]*upstreamClient),
 	}
+}
+
+func (m *Manager) SetInterceptor(fn func(upstream, tool, args string) bool) {
+	m.interceptor = fn
 }
 
 // StartAll spawns and initializes every configured upstream.
@@ -120,7 +125,17 @@ func (m *Manager) CallTool(ctx context.Context, req CallRequest) (*mcp.CallToolR
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
+	// Interception Logic
+	if !ups.cfg.AutoApprove && m.interceptor != nil {
+		// Convert args to string for display/interception
+		argBytes, _ := json.Marshal(req.Arguments)
+		if !m.interceptor(req.Upstream, req.Tool, string(argBytes)) {
+			return nil, fmt.Errorf("operation denied by user")
+		}
+	}
+
 	return ups.client.CallTool(ctx, callReq)
+
 }
 
 func (m *Manager) startOne(ctx context.Context, ups config.Upstream) error {
@@ -129,7 +144,6 @@ func (m *Manager) startOne(ctx context.Context, ups config.Upstream) error {
 		if ups.Workdir != "" {
 			c.Dir = ups.Workdir
 		}
-		c.Env = append(c.Env, os.Environ()...)
 		c.Env = append(c.Env, env...)
 		return c, nil
 	}
@@ -160,7 +174,7 @@ func (m *Manager) startOne(ctx context.Context, ups config.Upstream) error {
 			},
 		},
 	}
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
 	if _, err := cl.Initialize(ctx, initReq); err != nil {

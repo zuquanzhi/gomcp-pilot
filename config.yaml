@@ -1,0 +1,21 @@
+port: 8080
+auth_token: "TEST"
+
+# Upstreams define the MCP servers that the gateway will spawn and bridge.
+# Each entry is launched via stdio; the gateway performs MCP initialization
+# and exposes the tools over HTTP.
+upstreams:
+  - name: "filesystem"
+    command: "node"
+    args: ["/Users/zuquanzhi/Programs/gomcp-pilot/local_servers/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js", "."]
+    workdir: ""
+    env: []
+    auto_approve: false
+    
+  - name: "local-utils" # Go 实现的本地工具 MCP server 示例
+    command: "go"
+    args: ["run", "./scripts/local_mcp_server.go"]
+    workdir: ""
+    env: []
+    auto_approve: true
+  
