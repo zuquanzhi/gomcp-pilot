@@ -52,7 +52,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.cfg.Port),
-		Handler: s.authMiddleware(mux),
+		Handler: s.corsMiddleware(s.authMiddleware(mux)),
 	}
 
 	go func() {
@@ -146,6 +146,21 @@ func (s *Server) handleCallTool(w http.ResponseWriter, r *http.Request) {
 		"upstream": payload.Upstream,
 		"tool":     payload.Tool,
 		"result":   result,
+	})
+}
+
+func (s *Server) corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
 	})
 }
 

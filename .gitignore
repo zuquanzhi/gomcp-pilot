@@ -22,3 +22,14 @@ local_servers/
 # Logs/temp
 *.log
 tmp/
+
+# Web artifacts
+web/node_modules/
+web/dist/
+web/.env
+web/.env.local
+
+# General
+.env
+
+web/public/

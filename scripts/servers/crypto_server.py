@@ -111,6 +111,62 @@ def handle_request(line):
         sys.stdout.flush()
         return
 
+    # List Resources
+    if method == "resources/list":
+        resp = {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "resources": [
+                    {
+                        "uri": "crypto://status",
+                        "name": "Service Status",
+                        "mimeType": "application/json",
+                        "description": "Current status of the crypto service, including supported algorithms and uptime."
+                    }
+                ]
+            }
+        }
+        print(json.dumps(resp))
+        sys.stdout.flush()
+        return
+
+    # Read Resource
+    if method == "resources/read":
+        params = req.get("params", {})
+        uri = params.get("uri")
+        
+        if uri == "crypto://status":
+            content_json = json.dumps({
+                "status": "operational",
+                "algorithms": ["md5", "sha256"],
+                "version": "1.0",
+                "load": "low"
+            })
+            resp = {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "contents": [
+                        {
+                            "uri": uri,
+                            "mimeType": "application/json",
+                            "text": content_json
+                        }
+                    ]
+                }
+            }
+        else:
+            resp = {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "error": {"code": -32002, "message": "Resource not found"}
+            }
+            
+        print(json.dumps(resp))
+        sys.stdout.flush()
+        return
+
     # Fallback for unknown methods
     resp = {
         "jsonrpc": "2.0",
