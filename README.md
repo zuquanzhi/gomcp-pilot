@@ -8,7 +8,6 @@
   [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
 </div>
 
-**gomcp-pilot** (Go MCP Pilot)
 
 **gomcp-pilot** 是一个用 Go 编写的高性能 Model Context Protocol (MCP) 网关。它旨在连接大语言模型 (LLM) 与本地工具、服务和文件系统。
 
