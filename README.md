@@ -146,3 +146,4 @@ upstreams:
 *   `GET /resources/read?uri=...`
 
 所有接口均需携带 Header: `Authorization: Bearer <token>`
+  
