@@ -2,13 +2,13 @@
   <img src="assets/logo.png" alt="gomcp-pilot logo" width="200" height="auto" />
   <h1>gomcp-pilot</h1>
   <p>
-    <b>一个用 Go 编写的高性能 Model Context Protocol (MCP) 网关</b>
+    <b>一个用 Go 编写的高性能 Model Context Protocol (MCP) 网关</b> 
   </p>
 
   [![Go Version](https://img.shields.io/github/go-mod/go-version/zuquanzhi/gomcp-pilot?style=flat-square)](go.mod)
   [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
 
-  [ [English](doc/README_EN.md) | **中文** ]
+  [ [English](doc/README_EN.md) | **中文** ] <a href="https://deepwiki.com/zuquanzhi/gomcp-pilot"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </div>
 
 **gomcp-pilot** 是一个用 Go 编写的高性能 Model Context Protocol (MCP) 网关。它旨在连接大语言模型 (LLM) 与本地工具、服务和文件系统。
