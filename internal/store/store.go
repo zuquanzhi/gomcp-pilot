@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS request_logs (
 CREATE INDEX IF NOT EXISTS idx_timestamp ON request_logs(timestamp DESC);
 `
 
-// CallRecord represents a single tool invocation log.
+// CallRecord 代表单条工具调用日志。
 type CallRecord struct {
 	ID         int64
 	Timestamp  time.Time
@@ -38,7 +38,7 @@ type CallRecord struct {
 	DurationMs int64
 }
 
-// InitStore initializes the SQLite database.
+// InitStore 初始化 SQLite 数据库。
 func InitStore() error {
 	home, _ := os.UserHomeDir()
 	dbPath := filepath.Join(home, ".gomcp", "audit.db")
@@ -60,7 +60,7 @@ func InitStore() error {
 	return nil
 }
 
-// RecordCall logs a tool execution.
+// RecordCall 记录工具执行历史。
 func RecordCall(upstream, tool, args string, status string, errStr string, duration time.Duration) error {
 	if DB == nil {
 		return nil
@@ -72,7 +72,7 @@ func RecordCall(upstream, tool, args string, status string, errStr string, durat
 	return err
 }
 
-// GetRecentCalls retrieves the last N calls.
+// GetRecentCalls 获取最近 N 条调用记录。
 func GetRecentCalls(limit int) ([]CallRecord, error) {
 	if DB == nil {
 		return nil, nil

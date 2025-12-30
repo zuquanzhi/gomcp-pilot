@@ -9,14 +9,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config represents the runtime configuration loaded from YAML.
+// Config 从 YAML 加载的运行时配置。
 type Config struct {
 	Port      int        `yaml:"port"`
 	AuthToken string     `yaml:"auth_token"`
 	Upstreams []Upstream `yaml:"upstreams"`
 }
 
-// Upstream describes a single MCP server that will be launched via stdio.
+// Upstream 描述通过 stdio 启动的单个 MCP 服务器。
 type Upstream struct {
 	Name        string   `yaml:"name"`
 	Command     string   `yaml:"command"`
@@ -26,7 +26,7 @@ type Upstream struct {
 	AutoApprove bool     `yaml:"auto_approve"`
 }
 
-// DefaultPath returns "./config.yaml" if present, otherwise ~/.config/gomcp/config.yaml.
+// DefaultPath 返回默认配置路径：优先 "./config.yaml"，否则使用 ~/.config/gomcp/config.yaml。
 func DefaultPath() string {
 	if _, err := os.Stat("config.yaml"); err == nil {
 		return "config.yaml"
@@ -39,7 +39,7 @@ func DefaultPath() string {
 	return filepath.Join(home, ".config", "gomcp", "config.yaml")
 }
 
-// Load reads and unmarshals a YAML config file.
+// Load 读取并解析 YAML 配置文件。
 func Load(path string) (*Config, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {

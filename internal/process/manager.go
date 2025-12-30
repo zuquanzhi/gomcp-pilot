@@ -17,14 +17,14 @@ import (
 	"gomcp-pilot/internal/logger"
 )
 
-// CallRequest represents a tool invocation against a specific upstream.
+// CallRequest 代表针对特定上游的工具调用请求。
 type CallRequest struct {
 	Upstream  string
 	Tool      string
 	Arguments any
 }
 
-// ToolDescriptor is returned to HTTP clients when listing tools.
+// ToolDescriptor 返回给 HTTP 客户端的工具描述。
 type ToolDescriptor struct {
 	Upstream    string `json:"upstream"`
 	Name        string `json:"name"`
@@ -33,20 +33,21 @@ type ToolDescriptor struct {
 	InputSchema any    `json:"input_schema,omitempty"`
 }
 
-// Manager owns the lifecycle of all upstream MCP clients.
+// Manager 管理所有上游 MCP 客户端的生命周期。
 type Manager struct {
 	mu          sync.RWMutex
 	upstreams   map[string]*upstreamClient
-	interceptor func(upstream, tool, args string) bool // Returns true if allowed
+	interceptor func(upstream, tool, args string) bool // 拦截器：返回 true 表示允许执行
 }
 
+// upstreamClient 表示一个上游 MCP 客户端。包含配置、客户端实例和工具列表。
 type upstreamClient struct {
 	cfg    config.Upstream
 	client *client.Client
 	tools  []mcp.Tool
 }
 
-// NewManager builds an empty manager. Call StartAll before serving traffic.
+// NewManager 创建空管理器。在服务前需调用 StartAll。
 func NewManager() *Manager {
 	return &Manager{
 		upstreams: make(map[string]*upstreamClient),
@@ -57,7 +58,7 @@ func (m *Manager) SetInterceptor(fn func(upstream, tool, args string) bool) {
 	m.interceptor = fn
 }
 
-// StartAll spawns and initializes every configured upstream.
+// StartAll 启动并初始化所有配置好的上游。
 func (m *Manager) StartAll(ctx context.Context, cfg *config.Config) error {
 	for _, ups := range cfg.Upstreams {
 		if err := m.startOne(ctx, ups); err != nil {
@@ -67,7 +68,7 @@ func (m *Manager) StartAll(ctx context.Context, cfg *config.Config) error {
 	return nil
 }
 
-// StopAll tears down every upstream client.
+// StopAll 关闭所有上游客户端。
 func (m *Manager) StopAll() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -77,7 +78,7 @@ func (m *Manager) StopAll() {
 	}
 }
 
-// ResourceDescriptor represents an available resource from an upstream.
+// ResourceDescriptor 代表上游可用的资源。
 type ResourceDescriptor struct {
 	Upstream    string `json:"upstream"`
 	Name        string `json:"name"`
@@ -86,7 +87,7 @@ type ResourceDescriptor struct {
 	Description string `json:"description,omitempty"`
 }
 
-// ListResources aggregates resources across upstreams.
+// ListResources 聚合各上游资源。
 func (m *Manager) ListResources(upstreamFilter string) ([]ResourceDescriptor, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -97,16 +98,11 @@ func (m *Manager) ListResources(upstreamFilter string) ([]ResourceDescriptor, er
 			continue
 		}
 
-		// Resources are fetched dynamically or cached?
-		// mcp-go client doesn't seem to cache resources automatically like tools in some examples.
-		// We should fetch them on demand.
-
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		res, err := ups.client.ListResources(ctx, mcp.ListResourcesRequest{})
 		cancel()
 		if err != nil {
-			// Log error but continue with other upstreams? Or fail?
-			// For now, let's log and continue
+			// 记录警告并继续
 			logger.Global.Warn("Failed to list resources", zap.String("upstream", name), zap.Error(err))
 			continue
 		}
@@ -125,8 +121,7 @@ func (m *Manager) ListResources(upstreamFilter string) ([]ResourceDescriptor, er
 	return result, nil
 }
 
-// ListTools aggregates tools across upstreams. If upstreamFilter is non-empty, only
-// that upstream is returned.
+// ListTools 聚合工具。可通过 upstreamFilter 过滤单个上游。
 func (m *Manager) ListTools(upstreamFilter string) ([]ToolDescriptor, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -156,7 +151,7 @@ func (m *Manager) ListTools(upstreamFilter string) ([]ToolDescriptor, error) {
 	return result, nil
 }
 
-// CallTool forwards a tool invocation to the specified upstream.
+// CallTool 将工具调用转发给指定上游。
 func (m *Manager) CallTool(ctx context.Context, req CallRequest) (*mcp.CallToolResult, error) {
 	m.mu.RLock()
 	ups := m.upstreams[req.Upstream]
@@ -179,7 +174,7 @@ func (m *Manager) CallTool(ctx context.Context, req CallRequest) (*mcp.CallToolR
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
-	// Interception Logic
+	// 拦截逻辑
 	argBytes, _ := json.Marshal(req.Arguments)
 	argStr := string(argBytes)
 
@@ -205,10 +200,10 @@ func (m *Manager) CallTool(ctx context.Context, req CallRequest) (*mcp.CallToolR
 		return nil, err
 	}
 
-	// Try to get a string representation of the result content for logging
+	// 尝试为日志获取结果内容的字符串表示
 	var resStr string
 	if len(res.Content) > 0 {
-		// Just take the first bit of textcontent or image info
+		// 仅截取部分文本日志
 		if txt, ok := res.Content[0].(mcp.TextContent); ok {
 			resStr = txt.Text
 			if len(resStr) > 100 {
@@ -230,13 +225,12 @@ func (m *Manager) CallTool(ctx context.Context, req CallRequest) (*mcp.CallToolR
 
 }
 
-// ReadResource attempts to read a resource from any upstream that has it.
+// ReadResource 尝试从任何拥有该资源的上游读取。
 func (m *Manager) ReadResource(ctx context.Context, uri string) (*mcp.ReadResourceResult, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// Naive approach: try all upstreams.
-	// Optimization: This could be slow. Future work: cache URI->Upstream mapping.
+	// 优化空间：目前采用遍历所有上游的简单方式。
 	for name, ups := range m.upstreams {
 		req := mcp.ReadResourceRequest{
 			Request: mcp.Request{Method: string(mcp.MethodResourcesRead)},
@@ -281,12 +275,12 @@ func (m *Manager) startOne(ctx context.Context, ups config.Upstream) error {
 
 	cl := client.NewClient(stdio)
 
-	// Start transport
+	// 启动 transport
 	if err := cl.Start(ctx); err != nil {
 		return fmt.Errorf("start stdio client for %s: %w", ups.Name, err)
 	}
 
-	// Initialize handshake
+	// 初始化握手
 	initReq := mcp.InitializeRequest{
 		Request: mcp.Request{Method: string(mcp.MethodInitialize)},
 		Params: mcp.InitializeParams{

@@ -21,9 +21,8 @@ import (
 	"gomcp-pilot/internal/tui"
 )
 
-// RunTUI boots the upstream manager and HTTP server in TUI mode.
+// RunTUI 以 TUI 模式启动上游管理器和 HTTP 服务器。
 func RunTUI(ctx context.Context, cfg *config.Config) error {
-	// 1. Initialize Infrastructure
 	if err := logger.InitLogger(); err != nil {
 		return err
 	}
@@ -32,14 +31,12 @@ func RunTUI(ctx context.Context, cfg *config.Config) error {
 	}
 	defer store.Close()
 
-	// Redirect standard logger to TUI
 	log.SetOutput(&logWriter{})
 	stdLogger := log.New(&logWriter{}, "[gomcp] ", log.LstdFlags)
 
-	// 2. Initialize Process Manager with TUI Interceptor
 	manager := process.NewManager()
 	manager.SetInterceptor(func(upstream, tool, args string) bool {
-		// Send request to TUI
+		// 发送请求到 TUI
 		respChan := make(chan bool)
 		tui.InterceptChan <- tui.InterceptRequest{
 			Upstream:     upstream,
@@ -47,7 +44,7 @@ func RunTUI(ctx context.Context, cfg *config.Config) error {
 			Args:         args,
 			ResponseChan: respChan,
 		}
-		// Block waiting for user decision
+		// 阻塞等待用户决策
 		logger.Global.Info("Waiting for user approval",
 			zap.String("upstream", upstream),
 			zap.String("tool", tool))
@@ -67,7 +64,6 @@ func RunTUI(ctx context.Context, cfg *config.Config) error {
 	}
 	defer manager.StopAll()
 
-	// 3. Start HTTP Server
 	mcpSrv, err := mcpbridge.NewServer(manager)
 	if err != nil {
 		return err
@@ -79,7 +75,7 @@ func RunTUI(ctx context.Context, cfg *config.Config) error {
 		}
 	}()
 
-	// Tool Fetcher closure
+	// 工具获取闭包
 	toolFetcher := func(upstream string) ([]tui.ToolInfo, error) {
 		logger.Global.Info("Fetching tools for upstream", zap.String("upstream", upstream))
 		tools, err := manager.ListTools(upstream)
@@ -98,7 +94,7 @@ func RunTUI(ctx context.Context, cfg *config.Config) error {
 		return infos, nil
 	}
 
-	// 4. Start TUI (Blocks until quit)
+	// 启动 TUI（阻塞直到退出）
 	p := tea.NewProgram(tui.InitialModel(cfg, toolFetcher), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		return err
@@ -107,7 +103,7 @@ func RunTUI(ctx context.Context, cfg *config.Config) error {
 	return nil
 }
 
-// RunHeadless boots the manager and HTTP server without TUI, blocking until signal.
+// RunHeadless 启动管理器和 HTTP 服务器（无 TUI 模式），阻塞直到收到信号。
 func RunHeadless(ctx context.Context, cfg *config.Config) error {
 	// 1. Initialize Infrastructure
 	if err := logger.InitLogger(); err != nil {
@@ -118,10 +114,10 @@ func RunHeadless(ctx context.Context, cfg *config.Config) error {
 	}
 	defer store.Close()
 
-	// Standard logger
+	// 标准日志
 	stdLogger := log.New(os.Stdout, "[gomcp] ", log.LstdFlags)
 
-	// 2. Initialize Process Manager with simple logging interceptor
+	// 初始化带有简单日志拦截器的进程管理器
 	manager := process.NewManager()
 	manager.SetInterceptor(func(upstream, tool, args string) bool {
 		logger.Global.Info("Auto-approving tool call (Headless mode)",
@@ -135,14 +131,13 @@ func RunHeadless(ctx context.Context, cfg *config.Config) error {
 	}
 	defer manager.StopAll()
 
-	// 3. Start HTTP Server
 	mcpSrv, err := mcpbridge.NewServer(manager)
 	if err != nil {
 		return err
 	}
 	srv := server.New(cfg, manager, stdLogger, mcpSrv)
 
-	// Run server in foreground (blocking) since we don't have TUI to block
+	// 在前台运行服务器（阻塞）
 	logger.Global.Info("Running in Headless Mode. Press Ctrl+C to stop.")
 	return srv.Start(ctx)
 }
@@ -150,8 +145,8 @@ func RunHeadless(ctx context.Context, cfg *config.Config) error {
 type logWriter struct{}
 
 func (w *logWriter) Write(p []byte) (n int, err error) {
-	// basic bridge to our structured logger channel
-	// Remove trailing newline
+	// 桥接到结构化日志信道
+	// 移除末尾换行
 	msg := string(p)
 	if len(msg) > 0 && msg[len(msg)-1] == '\n' {
 		msg = msg[:len(msg)-1]
@@ -165,9 +160,9 @@ func (w *logWriter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-// RunMCP starts upstreams and serves an MCP server over stdio.
+// RunMCP 启动上游并通过 stdio 提供 MCP 服务。
 func RunMCP(ctx context.Context, cfg *config.Config) error {
-	// Initialize global zap logger first because process manager likely uses it
+	// 优先初始化全局 zap 日志
 	if err := logger.InitLogger(); err != nil {
 		return err
 	}
@@ -188,7 +183,7 @@ func RunMCP(ctx context.Context, cfg *config.Config) error {
 	return mcpbridge.ServeStdio(ctx, srv)
 }
 
-// WithSignals wraps a context with SIGINT/SIGTERM cancellation.
+// WithSignals 将 context 包装 SIGINT/SIGTERM 取消逻辑。
 func WithSignals() (context.Context, context.CancelFunc) {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	return ctx, cancel

@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	// LogChan is the channel where logs are sent for TUI display.
-	// Buffered to avoid blocking the application if TUI is slow.
+	// LogChan 用于发送日志到 TUI 显示。
+	// 使用缓冲以避免 TUI 处理慢时阻塞应用。
 	LogChan = make(chan LogEntry, 100)
 	atom    = zap.NewAtomicLevel()
 	once    sync.Once
@@ -26,18 +26,16 @@ type LogEntry struct {
 	Fields    map[string]interface{}
 }
 
-// ChannelSink implements zapcore.WriteSyncer to pipe logs to the TUI channel.
+// ChannelSink 实现 zapcore.WriteSyncer，将日志通过信道传输到 TUI。
 type ChannelSink struct{}
 
 func (cs *ChannelSink) Write(p []byte) (n int, err error) {
-	// Parse the JSON log entry back to struct for the TUI
-	// This is a bit inefficient but keeps the TUI decoupled from Zap internals.
-	// For high performance, we'd implement a custom Core.
-	// For this local tool, it's fine.
-	// note: p includes the newline.
+	// 将 JSON 日志条目解析回结构体供 TUI 使用。
+	// 这里略微牺牲效率以保持 TUI 与 Zap 内部实现的解耦。
+	// 注意：p 包含换行符。
 	msg := string(p)
-	
-	// Create a simple entry. We can improve parsing if we want structured data in TUI.
+
+	// 创建简单条目。未来可解析结构化数据。
 	// For now, let's just send the raw text or try to make it look decent.
 	LogChan <- LogEntry{
 		Level:     "INFO", // Default, hard to parse back without custom encoder
@@ -51,8 +49,7 @@ func (cs *ChannelSink) Sync() error {
 	return nil
 }
 
-// InitLogger initializes the global logger.
-// It writes to a log file and the LogChan.
+// InitLogger 初始化全局日志，同时写入文件和 LogChan。
 func InitLogger() error {
 	var err error
 	once.Do(func() {
@@ -60,11 +57,11 @@ func InitLogger() error {
 		logPath := filepath.Join(home, ".gomcp", "gomcp.log")
 		_ = os.MkdirAll(filepath.Dir(logPath), 0755)
 
-		// File Encoder config (JSON)
+		// 文件编码器配置 (JSON)
 		encoderConfig := zap.NewProductionEncoderConfig()
 		encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 
-		// File Core
+		// 文件核心
 		file, _ := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		fileWriter := zapcore.AddSync(file)
 		fileCore := zapcore.NewCore(
@@ -73,9 +70,7 @@ func InitLogger() error {
 			zap.InfoLevel,
 		)
 
-		// TUI Core - using a Console encoder for human readability in the TUI
-		// heavily simplified for now.
-		// Actually, let's make a custom Core for the TUI that sends structured LogEntry directly.
+		// TUI 核心 - 发送结构化 LogEntry
 		tuiCore := NewTUICore(zap.DebugLevel)
 
 		core := zapcore.NewTee(fileCore, tuiCore)
@@ -84,7 +79,7 @@ func InitLogger() error {
 	return err
 }
 
-// TUICore is a custom zapcore that sends typed LogEntry structs to the channel.
+// TUICore 自定义 zapcore，发送类型化的 LogEntry 到信道。
 type TUICore struct {
 	zapcore.LevelEnabler
 	encoder zapcore.Encoder
@@ -98,7 +93,7 @@ func NewTUICore(level zapcore.LevelEnabler) *TUICore {
 }
 
 func (c *TUICore) With(fields []zapcore.Field) zapcore.Core {
-	return c // Not implementing context fields for TUI simplicity yet
+	return c // 暂未实现 TUI 的 context 字段映射
 }
 
 func (c *TUICore) Check(ent zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
@@ -109,7 +104,7 @@ func (c *TUICore) Check(ent zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.Ch
 }
 
 func (c *TUICore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
-	// Convert fields to map
+	// 字段转 map
 	fieldMap := make(map[string]interface{})
 	enc := zapcore.NewMapObjectEncoder()
 	for _, f := range fields {

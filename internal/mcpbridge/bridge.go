@@ -14,7 +14,7 @@ import (
 	"gomcp-pilot/internal/store"
 )
 
-// NewServer builds an MCP server that forwards calls to upstream MCP servers via the process manager.
+// NewServer 创建一个 MCP 服务器，通过进程管理器将请求转发给上游。
 func NewServer(pm *process.Manager) (*server.MCPServer, error) {
 	s := server.NewMCPServer(
 		"gomcp-pilot",
@@ -36,7 +36,7 @@ func NewServer(pm *process.Manager) (*server.MCPServer, error) {
 			fmt.Sprintf("%s/%s", upstreamName, toolName),
 			mcp.WithDescription(t.Description),
 		)
-		// Preserve structured schema; avoid setting RawInputSchema to prevent conflicts.
+		// 保留结构化模板；避免设置 RawInputSchema 以防冲突。
 		if t.InputSchema != nil {
 			if b, err := json.Marshal(t.InputSchema); err == nil {
 				_ = json.Unmarshal(b, &mcpTool.InputSchema)
@@ -62,8 +62,7 @@ func NewServer(pm *process.Manager) (*server.MCPServer, error) {
 				errStr = err.Error()
 			}
 
-			// Async log to not block response too much, or sync for safety?
-			// Sync is safer for audit.
+			// 记录调用历史用于审计
 			_ = store.RecordCall(upstreamName, toolName, argsStr, status, errStr, duration)
 
 			if err != nil {
@@ -75,7 +74,7 @@ func NewServer(pm *process.Manager) (*server.MCPServer, error) {
 		s.AddTool(mcpTool, handler)
 	}
 
-	// Register Resource Handlers
+	// 注册资源处理器
 	resources, err := pm.ListResources("")
 	if err != nil {
 		// Log warning but proceed, as resources are optional
@@ -106,7 +105,7 @@ func NewServer(pm *process.Manager) (*server.MCPServer, error) {
 	return s, nil
 }
 
-// ServeStdio blocks serving MCP over stdio. The server will exit when stdin closes.
+// ServeStdio 阻塞式通过 stdio 提供 MCP 服务。当 stdin 关闭时退出。
 func ServeStdio(ctx context.Context, srv *server.MCPServer) error {
 	errCh := make(chan error, 1)
 	go func() {

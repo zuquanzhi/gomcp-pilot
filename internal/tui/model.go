@@ -13,20 +13,20 @@ import (
 	"gomcp-pilot/internal/logger"
 )
 
-// InterceptRequest represents a request that needs user approval.
+// InterceptRequest 代表需要用户审批的请求。
 type InterceptRequest struct {
 	Upstream string
 	Tool     string
 	Args     string
-	// ResponseChan is used to send the user's decision back to the bridge.
-	// true = approve, false = deny
+	// ResponseChan 用于将用户决策送回桥接层。
+	// true = 允许, false = 拒绝
 	ResponseChan chan bool
 }
 
-// InterceptChan is the global channel for incoming interception requests.
+// InterceptChan 全局拦截请求通道。
 var InterceptChan = make(chan InterceptRequest)
 
-// UpstreamStatus tracks the state of each upstream service
+// UpstreamStatus 跟踪各上游服务的状态
 type UpstreamStatus struct {
 	Name      string
 	Status    string // "Running", "Stopped", "Error"
@@ -35,7 +35,7 @@ type UpstreamStatus struct {
 	Config    config.Upstream
 }
 
-// ToolInfo simplified struct for display
+// ToolInfo 用于展示的简略工具信息结构
 type ToolInfo struct {
 	Name        string
 	Description string
@@ -98,7 +98,7 @@ func (m Model) Init() tea.Cmd {
 	)
 }
 
-// Tick to update uptime
+// Tick 用于更新运行时间
 func tickCmd() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
 		return tickMsg(t)
@@ -107,7 +107,7 @@ func tickCmd() tea.Cmd {
 
 type tickMsg time.Time
 
-// Msg for async tool fetching
+// Msg 用于异步获取工具
 type toolsFetchedMsg struct {
 	upstream string
 	tools    []ToolInfo
@@ -143,7 +143,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Global keys
+		// 全局快捷键
 		switch msg.String() {
 		case "q", "ctrl+c":
 			m.quitting = true
@@ -161,8 +161,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.detailViewport.HalfViewDown()
 		}
 
-		// Navigation (Sidebar) - Consumes Up/Down/j/k
-		// We do NOT forward these to viewport to avoid double scrolling/conflict
+		// 导航（侧边栏）- 消费 Up/Down/j/k
+		// 不转发给 viewport 以避免滚动冲突
 		switch msg.String() {
 		case "up", "k":
 			if m.selectedIdx > 0 {
@@ -186,7 +186,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...) // Return early
 		}
 
-		// Other keys - Pass to Viewport
+		// 其他按键 - 转发至 Viewport
 		var cmd tea.Cmd
 		m.logViewport, cmd = m.logViewport.Update(msg)
 		cmds = append(cmds, cmd)
@@ -203,7 +203,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.detailViewport.LineDown(3)
 		}
 
-		// Pass to viewport as well, just in case (though we handled scroll essentially)
+		// 转发至 viewport
 		var cmd tea.Cmd
 		m.logViewport, cmd = m.logViewport.Update(msg)
 		cmds = append(cmds, cmd)
@@ -237,9 +237,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detailViewport.Width = mainWidth
 		m.detailViewport.Height = mainHeight
 
-		// Force re-render content for new width wrap
-		// Also ensure we aren't showing stale empty content if we have data?
-		// Note: init doesn't fetch, so this is fine.
+		// 强制重新渲染内容
 		m.logViewport.SetContent(m.renderLogContent())
 		m.detailViewport.SetContent(m.renderDetailContent())
 
@@ -247,7 +245,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, tickCmd())
 
 	case toolsFetchedMsg:
-		// Only update if still selected (simple consistency check)
+		// 仅在当前选择未变时更新（简单一致性检查）
 		if m.selectedIdx < len(m.upstreams) && m.upstreams[m.selectedIdx].Name == msg.upstream {
 			if msg.err != nil {
 				m.fetchError = msg.err.Error()
@@ -260,10 +258,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case logger.LogEntry:
-		// Add new log line
+		// 添加新日志行
 		timeStamp := msg.Timestamp.Format("15:04:05")
 
-		// Apply styles based on level
+		// 根据级别应用样式
 		lvlStyle := styleLogInfo
 		if msg.Level == "WARN" {
 			lvlStyle = styleLogWarn
@@ -277,23 +275,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			msg.Message)
 
 		m.logs = append(m.logs, line)
-		// Keep a decent buffer
+		// 保留适量缓冲区
 		if len(m.logs) > 1000 {
 			m.logs = m.logs[len(m.logs)-1000:]
 		}
 
 		m.logViewport.SetContent(m.renderLogContent())
-		// Auto-scroll to bottom if we were already there or close to it?
-		// For simplicity, always auto-scroll for logs unless user scrolled up
-		// Viewport logic: if AtBottom(), keep AtBottom.
-		// Since we don't have complex logic here easily, let's just goto bottom for now.
+		// 默认日志自动滚动到底部
 		m.logViewport.GotoBottom()
 
 		cmds = append(cmds, waitForLog())
 
 	case InterceptRequest:
 		m.requestPending = &msg
-		// Update stats for this upstream (simple finder)
+		// 更新该上游统计信息
 		for i, u := range m.upstreams {
 			if u.Name == msg.Upstream {
 				m.upstreams[i].CallCount++
@@ -441,9 +436,7 @@ func (m Model) renderDetailContent() string {
 		for _, t := range m.currentTools {
 			s += fmt.Sprintf("• %s\n", lipgloss.NewStyle().Foreground(cHighlight).Render(t.Name))
 			if t.Description != "" {
-				// Explicitly wrap description to viewport width
-				// Viewport width might technically include padding logic in SetContent if styleLogPane has padding.
-				// styleLogPane has PaddingLeft(1). So effectively available is Width-1.
+				// 显式根据 viewport 宽度换行显示描述
 				wrapWidth := m.detailViewport.Width - 2
 				if wrapWidth < 10 {
 					wrapWidth = 10
@@ -464,7 +457,7 @@ func (m Model) renderInterceptModal() string {
 
 	header := styleModalHeader.Render("⚠️  INTERCEPTION REQUIRED ⚠️")
 
-	// Industrial detail view
+	// 工业级详情视图
 	kStyle := styleKeyParams
 	vStyle := lipgloss.NewStyle().Foreground(cForeground)
 

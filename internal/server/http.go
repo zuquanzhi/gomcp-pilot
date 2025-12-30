@@ -14,7 +14,7 @@ import (
 	mcpserver "github.com/mark3labs/mcp-go/server"
 )
 
-// Server exposes HTTP endpoints for MCP tool discovery and invocation.
+// Server 暴露用于 MCP 工具发现和调用的 HTTP 接口。
 type Server struct {
 	cfg       *config.Config
 	manager   *process.Manager
@@ -26,7 +26,7 @@ func New(cfg *config.Config, manager *process.Manager, logger *log.Logger, mcpSe
 	return &Server{cfg: cfg, manager: manager, logger: logger, mcpServer: mcpServer}
 }
 
-// Start runs the HTTP server until the context is cancelled.
+// Start 运行 HTTP 服务器直到 context 被取消。
 func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
@@ -35,10 +35,10 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/resources/list", s.handleListResources)
 	mux.HandleFunc("/resources/read", s.handleReadResource)
 
-	// Add SSE support
+	// 添加 SSE 支持
 	if s.mcpServer != nil {
-		// The endpoint URL that clients should post messages to.
-		// Constructing it based on config port.
+		// 客户端应向该端点 POST 消息。
+		// 根据配置端口构建。
 		endpointURL := fmt.Sprintf("http://localhost:%d/mcp/message", s.cfg.Port)
 		sseServer := mcpserver.NewSSEServer(
 			s.mcpServer,

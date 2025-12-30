@@ -132,6 +132,8 @@ upstreams:
 - [ ] **Plugin System**: Support custom middleware plugins.
 - [ ] **Docker Support**: Provide standard Docker images and K8s deployment manifests.
 - [ ] **WebSockets**: Full-duplex communication support to improve real-time performance.
+- [ ] **Metrics**: Metric monitoring and alerting.
+- [ ] **RAG**: Semantic resource discovery and search.
 
 ## API Reference
 

@@ -34,7 +34,7 @@ func main() {
 
 func startCmd(cfgPath *string) *cobra.Command {
 	return &cobra.Command{
-		Use:   "start", // Keep 'start' as TUI for backward compat, or change to 'tui'?
+		Use:   "start", // TUI 模式
 		Short: "Start the gomcp-pilot gateway with TUI",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runTUI(*cfgPath)
@@ -44,7 +44,7 @@ func startCmd(cfgPath *string) *cobra.Command {
 
 func serveCmd(cfgPath *string) *cobra.Command {
 	return &cobra.Command{
-		Use:   "serve",
+		Use:   "serve", // 无 TUI 模式
 		Short: "Start the gomcp-pilot gateway in headless mode (no TUI)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runHeadless(*cfgPath)
@@ -54,7 +54,7 @@ func serveCmd(cfgPath *string) *cobra.Command {
 
 func mcpCmd(cfgPath *string) *cobra.Command {
 	return &cobra.Command{
-		Use:   "stdio",
+		Use:   "stdio", // stdio 模式
 		Short: "Run as an MCP server over stdio (for MCP-compatible clients)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load(*cfgPath)

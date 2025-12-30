@@ -2,7 +2,7 @@ package tui
 
 import "github.com/charmbracelet/lipgloss"
 
-// Color Palette - Industrial / Cyberpunk-lite
+// 配色方案 - 工业风 / 极简赛博
 var (
 	cBackground = lipgloss.Color("#1a1b26") // Deep Night
 	cSidebar    = lipgloss.Color("#16161e") // Darker Side
@@ -17,12 +17,12 @@ var (
 )
 
 var (
-	// Layout
+	// 布局布局
 	styleApp = lipgloss.NewStyle().
 			Background(cBackground).
 			Foreground(cForeground)
 
-	// Header
+	// 页眉
 	styleHeader = lipgloss.NewStyle().
 			Foreground(cBackground).
 			Background(cAccent).
@@ -35,10 +35,10 @@ var (
 				Bold(true).
 				MarginRight(1)
 
-	// Sidebar (Upstreams)
+	// 侧边栏（上游服务）
 	styleSidebar = lipgloss.NewStyle().
 			Width(25).
-			Border(lipgloss.NormalBorder(), false, true, false, false). // Right border
+			Border(lipgloss.NormalBorder(), false, true, false, false). // 右边框
 			BorderForeground(cComment).
 			PaddingRight(1).
 			MarginRight(1)
@@ -56,7 +56,7 @@ var (
 	styleStatusStopped = lipgloss.NewStyle().Foreground(cComment).SetString("○")
 	styleStatusError   = lipgloss.NewStyle().Foreground(cDanger).SetString("✖")
 
-	// Main Content (Logs)
+	// 主内容（日志）
 	styleLogPane = lipgloss.NewStyle().
 		// Border(lipgloss.NormalBorder()).
 		// BorderForeground(cComment).
@@ -67,7 +67,7 @@ var (
 	styleLogWarn      = lipgloss.NewStyle().Foreground(cWarning)
 	styleLogError     = lipgloss.NewStyle().Foreground(cDanger)
 
-	// Intercept Modal
+	// 审批弹窗
 	styleModalBox = lipgloss.NewStyle().
 			Border(lipgloss.ThickBorder()).
 			BorderForeground(cDanger).

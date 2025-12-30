@@ -132,6 +132,8 @@ upstreams:
 - [ ] **Plugin System**: 支持自定义中间件插件。
 - [ ] **Docker Support**: 提供标准 Docker 镜像与 K8s 部署清单。
 - [ ] **WebSockets**: 全双工通信支持，提升实时性。
+- [ ] **Metrics**: 指标监控与告警。
+- [ ] **RAG**: 语义资源发现与搜索。
 
 ## API 参考
 
